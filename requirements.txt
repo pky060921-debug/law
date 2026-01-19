@@ -1,5 +1,4 @@
 Flask
 gspread
 oauth2client
-kiwipiepy
 gunicorn
