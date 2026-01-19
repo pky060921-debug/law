@@ -1,0 +1,30 @@
+{% extends "layout.html" %}
+{% block content %}
+    <div style="text-align:center; margin: 20px 0;">
+        <div style="font-size: 80px; filter: drop-shadow(0 0 15px rgba(212,175,55,0.4)); animation: float 3s infinite ease-in-out;">
+            {% if level < 5 %}📜
+            {% elif level < 10 %}🧿
+            {% elif level < 20 %}🔮
+            {% else %}🧙‍♂️{% endif %}
+        </div>
+        <h2>Lv.{{ level }} {{ user_id }}</h2>
+        
+        <div style="background:#222; border-radius:10px; height:15px; width:100%; margin: 15px 0; border:1px solid #555; overflow:hidden;">
+            <div style="background:linear-gradient(to right, #4b0082, #00ffff); height:100%; width:{{ (xp / req_xp * 100)|int }}%;"></div>
+        </div>
+        <div style="text-align:right; font-size:0.8rem; color:#aaa;">마력: {{ xp }} / {{ req_xp }}</div>
+    </div>
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 30px;">
+        <a href="/dungeon" style="text-decoration:none;">
+            <div class="btn" style="text-align:center;">⚔️ 금지된 서고</div>
+        </a>
+        <a href="/collection" style="text-decoration:none;">
+            <div class="btn" style="text-align:center;">📖 아카식 레코드</div>
+        </a>
+    </div>
+    
+    <style>
+        @keyframes float { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-10px);} }
+    </style>
+{% endblock %}
