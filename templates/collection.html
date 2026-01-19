@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block content %}
+    <h2>📖 아카식 레코드</h2>
+    
+    {% if not cards %}
+        <p style="text-align:center; color:#aaa; margin-top:50px;">기록된 지식이 없습니다.</p>
+    {% else %}
+        {% for c in cards %}
+            {% set color = '#cd7f32' %}
+            {% if c.grade == 'LEGEND' %}{% set color = '#FFD700' %}
+            {% elif c.grade == 'RARE' %}{% set color = '#00FFFF' %}{% endif %}
+            
+            <div class="card" style="border-color: {{ color }}; box-shadow: 0 0 10px {{ color }}40;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:10px; font-weight:bold;">
+                    <span style="color:{{ color }};">{{ c.grade }}</span>
+                    <span style="color:#aaa;">Lv.{{ c.count }}</span>
+                </div>
+                <div style="font-size:1.1rem; margin-bottom:10px;">{{ c.card_text }}</div>
+                <div style="text-align:right; font-size:0.8rem; color:#666; font-style:italic;">
+                    출처: {{ c.quest_name }}
+                </div>
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endblock %}
