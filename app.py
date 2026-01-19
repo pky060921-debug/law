@@ -7,16 +7,16 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-# [변경] Kiwi(무거운 AI) 제거 -> 가벼운 방식 사용
+# [핵심] Kiwi(무거운 AI) 제거 -> 가벼운 방식 사용
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'default_key')
+app.secret_key = os.environ.get('SECRET_KEY', 'default_magic_key')
 
 class GoogleSheetManager:
     def __init__(self):
         try:
             json_creds = os.environ.get('GCP_CREDENTIALS')
             if not json_creds:
-                print("GCP 자격 증명 없음")
+                print("⚠️ GCP 자격 증명이 없습니다.")
                 return
             creds_dict = json.loads(json_creds)
             scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
@@ -24,7 +24,6 @@ class GoogleSheetManager:
             self.client = gspread.authorize(creds)
             self.sheet = self.client.open("memory_game_db")
             
-            # 시트 연결 (없으면 생성)
             try: self.users_ws = self.sheet.worksheet("users")
             except: self.users_ws = self.sheet.add_worksheet("users", 100, 10); self.users_ws.append_row(["user_id", "password", "level", "xp", "title"])
             try: self.collections_ws = self.sheet.worksheet("collections")
@@ -103,15 +102,16 @@ class GoogleSheetManager:
 
 gm = GoogleSheetManager()
 
-# [변경] Kiwi 대신 간단한 문장 분리 함수
+# [변경] 가벼운 문장 분리 함수 (Kiwi 대체)
 def split_text_basic(text):
     # 마침표, 물음표, 느낌표 뒤에서 자르기
     sents = re.split(r'(?<=[.?!])\s+', text)
-    return [s for s in sents if len(s.strip()) > 5]
+    return [s.strip() for s in sents if len(s.strip()) > 5]
 
-# [변경] 명사 추출 대신 간단한 랜덤 단어 빈칸 (2음절 이상)
+# [변경] 가벼운 단어 추출 함수 (Kiwi 대체)
 def extract_blank_words(text):
     words = text.split()
+    # 2글자 이상인 단어만 후보로 선정
     candidates = [w.strip(".,?!'\"") for w in words if len(w) >= 2]
     return list(set(candidates))
 
@@ -167,7 +167,7 @@ def dungeon():
             sents = split_text_basic(content)
             
             if not sents: 
-                flash("내용 부족")
+                flash("내용이 너무 짧습니다.")
                 return redirect(url_for('dungeon'))
             session['quest_sents'] = sents
             session['q_idx'] = 0
@@ -193,13 +193,11 @@ def dungeon_play():
         # [변경] 가벼운 단어 추출
         candidates = extract_blank_words(curr_sent)
         
-        # 랜덤으로 1~3개 단어 선택 (빈칸용)
         if not candidates:
             session['q_idx'] += 1
             return redirect(url_for('dungeon_play'))
             
-        # 난이도에 따라 개수 조절 (여기선 간단히 20% 단어)
-        k = max(1, int(len(candidates) * 0.2))
+        k = max(1, int(len(candidates) * 0.2)) # 단어의 20%를 빈칸으로
         target_words = random.sample(candidates, k)
         
         matches = []
@@ -244,4 +242,4 @@ def collection():
     return render_template('collection.html', cards=cards)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=10000)
