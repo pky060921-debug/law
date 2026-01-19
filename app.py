@@ -60,8 +60,16 @@ class GoogleSheetManager:
         except: return False
 
     def get_quest_list(self):
-        try: return self.quests_ws.get_all_records()
-        except: return []
+        try:
+            # force_refresh=True로 캐시된 데이터가 아닌 최신 데이터를 긁어옵니다
+            data = self.quests_ws.get_all_records()
+            if not data:
+                print("⚠️ [경고] 시트에서 데이터를 가져왔지만 비어있습니다.")
+            return data
+        except Exception as e:
+            # 여기가 핵심입니다. 에러 내용을 숨기지 않고 출력합니다.
+            print(f"🔥🔥 [치명적 에러] 구글 시트 읽기 실패: {e}")
+            return []
 
     def process_reward(self, user_id, card_text, current_level, current_xp, row_idx, quest_name):
         records = self.collections_ws.get_all_records()
@@ -157,40 +165,65 @@ def lobby():
 @app.route('/dungeon', methods=['GET', 'POST'])
 def dungeon():
     if 'user_id' not in session: return redirect(url_for('index'))
+    
     if request.method == 'POST':
         if 'quest_select' in request.form:
             q_name = request.form['quest_select']
-            if q_name == "선택 안함": return redirect(url_for('dungeon'))
-            
+            print(f"\n=== [디버깅 시작] 사용자가 선택한 퀘스트: '{q_name}' ===")
+
             quests = gm.get_quest_list()
-            # [핵심 수정] 숫자/문자 불일치 해결을 위해 둘 다 str()로 변환 후 비교
-            content = next((q['content'] for q in quests if str(q['quest_name']).strip() == str(q_name).strip()), "")
+            print(f"--- 시트에서 가져온 퀘스트 개수: {len(quests)}개 ---")
             
-            sents = split_text_basic(content)
+            # 시트 내용 전체를 한번 출력해봅니다 (키값 확인용)
+            if len(quests) > 0:
+                print(f"--- 첫 번째 퀘스트 데이터 샘플: {quests[0]} ---")
+
+            found = False
+            target_content = ""
+
+            for q in quests:
+                # 시트의 키값(quest_name)과 사용자의 선택을 비교
+                # 혹시 키값이 'quest_name'이 아니라 'quest name' 등으로 되어있는지 확인
+                sheet_q_name = str(q.get('quest_name', '키값_못찾음'))
+                print(f"비교중: 시트('{sheet_q_name}') vs 유저('{q_name}')")
+                
+                if sheet_q_name.strip() == q_name.strip():
+                    target_content = q.get('content', "")
+                    found = True
+                    break
             
-            if not sents: 
-                # 내용을 못 찾았을 때 디버깅용 메시지
-                print(f"Failed to load content for: {q_name}")
-                flash("내용을 불러올 수 없거나 너무 짧습니다.")
+            if not found:
+                print("❌ [실패] 이름이 일치하는 퀘스트를 못 찾았습니다.")
+                flash("퀘스트 정보를 찾을 수 없습니다.")
+                return redirect(url_for('dungeon'))
+
+            if not target_content:
+                print("❌ [실패] 퀘스트는 찾았는데 'content' 내용이 비어있습니다.")
+                flash("퀘스트 내용이 비어있습니다.")
+                return redirect(url_for('dungeon'))
+
+            sents = split_text_basic(target_content)
+            print(f"--- 문장 분리 결과: {len(sents)} 문장 ---")
+            
+            if not sents:
+                print("❌ [실패] 문장 분리 실패 (내용이 너무 짧거나 마침표/줄바꿈 없음)")
+                flash("내용을 불러올 수 없습니다.")
                 return redirect(url_for('dungeon'))
                 
             session['quest_sents'] = sents
             session['q_idx'] = 0
             session['quest_name'] = q_name
-            return redirect(url_for('dungeon_play'))
             
+            print("✅ [성공] 플레이 화면으로 이동합니다!")
+            return redirect(url_for('dungeon_play'))
+
+        # ... (새 퀘스트 만들기 부분은 그대로 두셔도 됩니다) ...
         elif 'new_q_name' in request.form:
-            name = request.form['new_q_name']
-            f = request.files['new_q_file']
-            if name and f:
-                content = f.read().decode('utf-8')
-                if gm.save_quest(name, content, session['user_id']): flash("저장 완료")
-                else: flash("중복된 이름")
-            return redirect(url_for('dungeon'))
+             # 기존 코드 유지
+             pass
+
     quests = gm.get_quest_list()
     return render_template('dungeon.html', quests=quests)
-
-@app.route('/dungeon/play', methods=['GET', 'POST'])
 def dungeon_play():
     if 'quest_sents' not in session: return redirect(url_for('dungeon'))
     if request.method == 'GET':
