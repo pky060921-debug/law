@@ -7,7 +7,6 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-# [핵심] Kiwi(무거운 AI) 제거 -> 가벼운 방식 사용
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default_magic_key')
 
@@ -55,7 +54,7 @@ class GoogleSheetManager:
         try:
             records = self.quests_ws.get_all_records()
             for row in records:
-                if row['quest_name'] == name: return False
+                if str(row['quest_name']) == str(name): return False
             self.quests_ws.append_row([name, content[:45000], creator, str(datetime.date.today())])
             return True
         except: return False
@@ -102,16 +101,18 @@ class GoogleSheetManager:
 
 gm = GoogleSheetManager()
 
-# [변경] 가벼운 문장 분리 함수 (Kiwi 대체)
+# [수정됨] 더 강력한 문장 분리기 (줄바꿈도 문장으로 인식)
 def split_text_basic(text):
+    if not text: return []
+    # 줄바꿈을 마침표로 치환해서 문장이 끊기도록 유도
+    text = text.replace('\r\n', '\n').replace('\n', '.')
     # 마침표, 물음표, 느낌표 뒤에서 자르기
-    sents = re.split(r'(?<=[.?!])\s+', text)
-    return [s.strip() for s in sents if len(s.strip()) > 5]
+    sents = re.split(r'[.?!]', text)
+    # 빈 문장 제거 및 길이 체크 (2글자 이상)
+    return [s.strip() for s in sents if len(s.strip()) > 2]
 
-# [변경] 가벼운 단어 추출 함수 (Kiwi 대체)
 def extract_blank_words(text):
     words = text.split()
-    # 2글자 이상인 단어만 후보로 선정
     candidates = [w.strip(".,?!'\"") for w in words if len(w) >= 2]
     return list(set(candidates))
 
@@ -160,19 +161,24 @@ def dungeon():
         if 'quest_select' in request.form:
             q_name = request.form['quest_select']
             if q_name == "선택 안함": return redirect(url_for('dungeon'))
-            quests = gm.get_quest_list()
-            content = next((q['content'] for q in quests if q['quest_name'] == q_name), "")
             
-            # [변경] 가벼운 함수 사용
+            quests = gm.get_quest_list()
+            # [핵심 수정] 숫자/문자 불일치 해결을 위해 둘 다 str()로 변환 후 비교
+            content = next((q['content'] for q in quests if str(q['quest_name']).strip() == str(q_name).strip()), "")
+            
             sents = split_text_basic(content)
             
             if not sents: 
-                flash("내용이 너무 짧습니다.")
+                # 내용을 못 찾았을 때 디버깅용 메시지
+                print(f"Failed to load content for: {q_name}")
+                flash("내용을 불러올 수 없거나 너무 짧습니다.")
                 return redirect(url_for('dungeon'))
+                
             session['quest_sents'] = sents
             session['q_idx'] = 0
             session['quest_name'] = q_name
             return redirect(url_for('dungeon_play'))
+            
         elif 'new_q_name' in request.form:
             name = request.form['new_q_name']
             f = request.files['new_q_file']
@@ -190,14 +196,13 @@ def dungeon_play():
     if request.method == 'GET':
         curr_sent = session['quest_sents'][session['q_idx'] % len(session['quest_sents'])]
         
-        # [변경] 가벼운 단어 추출
         candidates = extract_blank_words(curr_sent)
         
         if not candidates:
             session['q_idx'] += 1
             return redirect(url_for('dungeon_play'))
             
-        k = max(1, int(len(candidates) * 0.2)) # 단어의 20%를 빈칸으로
+        k = max(1, int(len(candidates) * 0.2)) 
         target_words = random.sample(candidates, k)
         
         matches = []
