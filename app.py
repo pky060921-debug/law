@@ -10,8 +10,12 @@ from oauth2client.service_account import ServiceAccountCredentials
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default_magic_key')
 
+# [핵심 수정 1] 텍스트가 너무 길어서 쿠키에 못 담으므로, 서버 메모리에 임시 저장합니다.
+# 구조: { 'user_id': { 'sents': [...], 'q_idx': 0, 'quest_name': '...' } }
+ACTIVE_GAMES = {}
+
 # ---------------------------------------------------------
-# 1. 구글 시트 매니저 (안전장치 포함)
+# 1. 구글 시트 매니저
 # ---------------------------------------------------------
 class GoogleSheetManager:
     def __init__(self):
@@ -31,7 +35,6 @@ class GoogleSheetManager:
             self.client = gspread.authorize(creds)
             self.sheet = self.client.open("memory_game_db")
             
-            # 시트 연결 (없으면 생성)
             try: self.users_ws = self.sheet.worksheet("users")
             except: self.users_ws = self.sheet.add_worksheet("users", 100, 10); self.users_ws.append_row(["user_id", "password", "level", "xp", "title"])
             
@@ -47,14 +50,9 @@ class GoogleSheetManager:
             print(f"🔥🔥 [치명적 에러] 구글 시트 연결 실패: {e}")
 
     def get_quest_list(self):
-        if self.quests_ws is None:
-            return []
-        try:
-            # force_refresh 같은 옵션 없이 순수하게 가져옵니다.
-            return self.quests_ws.get_all_records()
-        except Exception as e:
-            print(f"❌ 퀘스트 목록 읽기 실패: {e}")
-            return []
+        if self.quests_ws is None: return []
+        try: return self.quests_ws.get_all_records()
+        except: return []
 
     def login(self, user_id, password):
         if self.users_ws is None: return None, None
@@ -128,15 +126,12 @@ class GoogleSheetManager:
 gm = GoogleSheetManager()
 
 # ---------------------------------------------------------
-# 2. 텍스트 처리 헬퍼 함수
+# 2. 헬퍼 함수
 # ---------------------------------------------------------
 def split_text_basic(text):
     if not text: return []
-    # 줄바꿈을 마침표로 치환해서 문장이 끊기도록 유도
     text = text.replace('\r\n', '\n').replace('\n', '.')
-    # 마침표, 물음표, 느낌표 뒤에서 자르기
     sents = re.split(r'[.?!]', text)
-    # 빈 문장 제거 및 길이 체크 (2글자 이상)
     return [s.strip() for s in sents if len(s.strip()) > 2]
 
 def extract_blank_words(text):
@@ -145,7 +140,7 @@ def extract_blank_words(text):
     return list(set(candidates))
 
 # ---------------------------------------------------------
-# 3. 라우트 (페이지 이동)
+# 3. 라우트
 # ---------------------------------------------------------
 @app.route('/')
 def index():
@@ -190,59 +185,52 @@ def dungeon():
     if 'user_id' not in session: return redirect(url_for('index'))
     
     if request.method == 'POST':
-        # 1. 퀘스트 선택 로직 (디버깅 강화)
+        # --- 퀘스트 선택 ---
         if 'quest_select' in request.form:
             q_name = request.form['quest_select']
-            print(f"\n=== [DEBUG] 사용자 선택: {q_name} ===")
+            print(f"\n=== [DEBUG] 선택: {q_name} ===")
 
-            if q_name == "선택 안함": 
-                flash("퀘스트를 선택해주세요.")
-                return redirect(url_for('dungeon'))
+            if q_name == "선택 안함": return redirect(url_for('dungeon'))
             
             quests = gm.get_quest_list()
-            print(f"--- 시트에서 로드된 퀘스트: {len(quests)}개 ---")
-
-            # 시트 키값과 유저 선택값을 안전하게 비교
             selected_quest = None
             for q in quests:
-                # 시트의 A열 키 이름이 quest_name 인지 확인
-                sheet_name = str(q.get('quest_name', '')).strip()
-                if sheet_name == str(q_name).strip():
+                if str(q.get('quest_name', '')).strip() == str(q_name).strip():
                     selected_quest = q
                     break
             
             if not selected_quest:
-                print(f"!!! [ERROR] '{q_name}'을 시트에서 찾을 수 없습니다. (헤더 'quest_name' 확인 필요)")
-                flash("퀘스트 데이터를 찾을 수 없습니다.")
+                flash("데이터를 찾을 수 없습니다.")
                 return redirect(url_for('dungeon'))
 
             content = selected_quest.get('content', "")
             sents = split_text_basic(content)
             
             if not sents: 
-                print(f"!!! [ERROR] 내용 분해 실패. 원본: {content[:30]}...")
-                flash("퀘스트 내용이 없거나 너무 짧습니다.")
+                flash("내용이 너무 짧습니다.")
                 return redirect(url_for('dungeon'))
-                
-            session['quest_sents'] = sents
-            session['q_idx'] = 0
-            session['quest_name'] = q_name
             
-            print("✅ [성공] 플레이 화면으로 이동!")
+            # [핵심 수정 2] 쿠키(Session) 대신 서버 메모리(ACTIVE_GAMES)에 저장
+            user_id = session['user_id']
+            ACTIVE_GAMES[user_id] = {
+                'sents': sents,
+                'q_idx': 0,
+                'quest_name': q_name,
+                'curr_targets': [],
+                'curr_sent_text': ""
+            }
+            
+            print("✅ 서버 메모리에 게임 데이터 저장 완료")
             return redirect(url_for('dungeon_play'))
             
-        # 2. 퀘스트 생성 로직
+        # --- 퀘스트 생성 ---
         elif 'new_q_name' in request.form:
             name = request.form['new_q_name']
             f = request.files['new_q_file']
             if name and f:
                 content = f.read().decode('utf-8')
-                if not content.strip():
-                    flash("내용이 빈 파일입니다.")
-                elif gm.save_quest(name, content, session['user_id']): 
-                    flash("저장 완료")
-                else: 
-                    flash("중복된 이름이거나 저장 실패")
+                if gm.save_quest(name, content, session['user_id']): flash("저장 완료")
+                else: flash("저장 실패")
             return redirect(url_for('dungeon'))
 
     quests = gm.get_quest_list()
@@ -250,19 +238,24 @@ def dungeon():
 
 @app.route('/dungeon/play', methods=['GET', 'POST'])
 def dungeon_play():
-    if 'quest_sents' not in session: return redirect(url_for('dungeon'))
+    if 'user_id' not in session: return redirect(url_for('index'))
+    user_id = session['user_id']
+    
+    # [핵심 수정 3] 서버 메모리에서 데이터 가져오기
+    game_data = ACTIVE_GAMES.get(user_id)
+    if not game_data:
+        print("❌ 진행 중인 게임 데이터가 없습니다.")
+        flash("게임 정보가 만료되었습니다. 다시 선택해주세요.")
+        return redirect(url_for('dungeon'))
+    
+    sents = game_data['sents']
     
     if request.method == 'GET':
-        if not session['quest_sents']: return redirect(url_for('dungeon'))
-        
-        # 인덱스가 범위를 벗어나지 않게 순환
-        curr_sent = session['quest_sents'][session['q_idx'] % len(session['quest_sents'])]
-        
+        curr_sent = sents[game_data['q_idx'] % len(sents)]
         candidates = extract_blank_words(curr_sent)
         
-        # 빈칸 뚫을 단어가 없으면 다음 문장으로 패스
         if not candidates:
-            session['q_idx'] += 1
+            game_data['q_idx'] += 1
             return redirect(url_for('dungeon_play'))
             
         k = max(1, int(len(candidates) * 0.2)) 
@@ -284,21 +277,32 @@ def dungeon_play():
             last_idx = end
         if last_idx < len(curr_sent): parts.append({'type': 'text', 'val': curr_sent[last_idx:]})
             
-        session['curr_targets'] = targets
-        session['curr_sent_text'] = curr_sent
+        # 서버 메모리에 정답 업데이트
+        game_data['curr_targets'] = targets
+        game_data['curr_sent_text'] = curr_sent
+        
         return render_template('dungeon_play.html', parts=parts)
 
     elif request.method == 'POST':
         user_inputs = request.form.getlist('answers')
-        targets = session.get('curr_targets', [])
+        targets = game_data.get('curr_targets', [])
+        
         all_correct = True
         for u, t in zip(user_inputs, targets):
             if u.strip() != t: all_correct = False; break
+            
         if all_correct:
-            g, gain, nl, nx, stat, cnt = gm.process_reward(session['user_id'], session['curr_sent_text'], session['level'], session['xp'], session['user_row_idx'], session['quest_name'])
+            g, gain, nl, nx, stat, cnt = gm.process_reward(
+                session['user_id'], 
+                game_data['curr_sent_text'], 
+                session['level'], 
+                session['xp'], 
+                session['user_row_idx'], 
+                game_data['quest_name']
+            )
             session['level'] = nl; session['xp'] = nx
             flash(f"정답! +{gain} XP")
-            session['q_idx'] += 1
+            game_data['q_idx'] += 1
         else:
             flash("오답입니다.")
         return redirect(url_for('dungeon_play'))
@@ -310,5 +314,4 @@ def collection():
     return render_template('collection.html', cards=cards)
 
 if __name__ == '__main__':
-    # 로컬 테스트용 (Render에서는 gunicorn이 실행하므로 이 부분은 무시됨)
     app.run(host='0.0.0.0', port=10000)
