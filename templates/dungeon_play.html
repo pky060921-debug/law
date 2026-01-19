@@ -1,0 +1,24 @@
+{% extends "layout.html" %}
+{% block content %}
+    <h2 style="margin-bottom:30px;">✨ 주문 시전 중...</h2>
+    
+    <div style="line-height: 2.2; font-size: 1.2rem; text-align: justify; background:rgba(0,0,0,0.3); padding:20px; border-radius:10px; border:1px solid #444;">
+        <form method="POST" autocomplete="off">
+            {% for part in parts %}
+                {% if part.type == 'text' %}
+                    {{ part.val }}
+                {% else %}
+                    <input type="text" name="answers" class="magic-input">
+                {% endif %}
+            {% endfor %}
+            
+            <div style="margin-top:40px;">
+                <button type="submit" class="btn">🔥 마법 발동 (정답 확인)</button>
+            </div>
+        </form>
+    </div>
+    
+    <div style="text-align:center; margin-top:20px;">
+        <a href="/dungeon" style="color:#666; font-size:0.9rem;">집중이 깨졌습니다 (돌아가기)</a>
+    </div>
+{% endblock %}
