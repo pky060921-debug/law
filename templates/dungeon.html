@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+{% block content %}
+    <h2>📜 금지된 지식의 서</h2>
+    
+    <div class="card">
+        <h3>주문서 해독</h3>
+        <form action="/dungeon" method="POST">
+            <input type="hidden" name="load_quest" value="1">
+            <select name="quest_select" style="width:100%; padding:10px; background:#222; color:#e8dcb5; border:1px solid #d4af37; border-radius:5px; margin-bottom:10px;">
+                <option>선택 안함</option>
+                {% for q in quests %}
+                <option value="{{ q.quest_name }}">{{ q.quest_name }}</option>
+                {% endfor %}
+            </select>
+            <button class="btn">✨ 해독 시작</button>
+        </form>
+    </div>
+
+    <div class="card" style="margin-top:30px;">
+        <h3>새 주문서 기록</h3>
+        <form action="/dungeon" method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="save_quest" value="1">
+            <input type="text" name="new_q_name" placeholder="주문서 이름" required>
+            <input type="file" name="new_q_file" accept=".txt" style="color:#aaa; margin:10px auto;" required>
+            <button class="btn" style="border-color:#666; color:#aaa;">기록하기</button>
+        </form>
+    </div>
+{% endblock %}
