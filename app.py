@@ -10,29 +10,54 @@ from oauth2client.service_account import ServiceAccountCredentials
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default_magic_key')
 
+# ---------------------------------------------------------
+# 1. 구글 시트 매니저 (안전장치 포함)
+# ---------------------------------------------------------
 class GoogleSheetManager:
     def __init__(self):
+        self.users_ws = None
+        self.collections_ws = None
+        self.quests_ws = None
+        
         try:
             json_creds = os.environ.get('GCP_CREDENTIALS')
             if not json_creds:
-                print("⚠️ GCP 자격 증명이 없습니다.")
+                print("⚠️ [경고] GCP 자격 증명(환경변수)이 없습니다.")
                 return
+            
             creds_dict = json.loads(json_creds)
             scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
             self.client = gspread.authorize(creds)
             self.sheet = self.client.open("memory_game_db")
             
+            # 시트 연결 (없으면 생성)
             try: self.users_ws = self.sheet.worksheet("users")
             except: self.users_ws = self.sheet.add_worksheet("users", 100, 10); self.users_ws.append_row(["user_id", "password", "level", "xp", "title"])
+            
             try: self.collections_ws = self.sheet.worksheet("collections")
             except: self.collections_ws = self.sheet.add_worksheet("collections", 100, 10); self.collections_ws.append_row(["user_id", "card_text", "grade", "collected_at", "quest_name", "count"])
+            
             try: self.quests_ws = self.sheet.worksheet("quests")
             except: self.quests_ws = self.sheet.add_worksheet("quests", 100, 5); self.quests_ws.append_row(["quest_name", "content", "created_by", "created_at"])
+            
+            print("✅ 구글 시트 연결 성공!")
+            
         except Exception as e:
-            print(f"구글 시트 연결 오류: {e}")
+            print(f"🔥🔥 [치명적 에러] 구글 시트 연결 실패: {e}")
+
+    def get_quest_list(self):
+        if self.quests_ws is None:
+            return []
+        try:
+            # force_refresh 같은 옵션 없이 순수하게 가져옵니다.
+            return self.quests_ws.get_all_records()
+        except Exception as e:
+            print(f"❌ 퀘스트 목록 읽기 실패: {e}")
+            return []
 
     def login(self, user_id, password):
+        if self.users_ws is None: return None, None
         try:
             records = self.users_ws.get_all_records()
             for i, row in enumerate(records):
@@ -42,6 +67,7 @@ class GoogleSheetManager:
         return None, None
 
     def register(self, user_id, password):
+        if self.users_ws is None: return False
         try:
             records = self.users_ws.get_all_records()
             for row in records:
@@ -51,27 +77,18 @@ class GoogleSheetManager:
         except: return False
 
     def save_quest(self, name, content, creator):
+        if self.quests_ws is None: return False
         try:
             records = self.quests_ws.get_all_records()
             for row in records:
-                if str(row['quest_name']) == str(name): return False
+                if str(row.get('quest_name')) == str(name): return False
             self.quests_ws.append_row([name, content[:45000], creator, str(datetime.date.today())])
             return True
         except: return False
 
-    def get_quest_list(self):
-        try:
-            # force_refresh=True로 캐시된 데이터가 아닌 최신 데이터를 긁어옵니다
-            data = self.quests_ws.get_all_records()
-            if not data:
-                print("⚠️ [경고] 시트에서 데이터를 가져왔지만 비어있습니다.")
-            return data
-        except Exception as e:
-            # 여기가 핵심입니다. 에러 내용을 숨기지 않고 출력합니다.
-            print(f"🔥🔥 [치명적 에러] 구글 시트 읽기 실패: {e}")
-            return []
-
     def process_reward(self, user_id, card_text, current_level, current_xp, row_idx, quest_name):
+        if self.collections_ws is None: return "ERROR", 0, current_level, current_xp, "ERROR", 0
+        
         records = self.collections_ws.get_all_records()
         found_idx = -1; current_count = 0; current_grade = "NORMAL"
         for i, row in enumerate(records):
@@ -104,12 +121,15 @@ class GoogleSheetManager:
         return final_grade, xp_gain, new_level, new_xp, status, current_count + 1 if found_idx != -1 else 1
     
     def get_collections(self, user_id):
+        if self.collections_ws is None: return []
         try: return [c for c in self.collections_ws.get_all_records() if str(c['user_id']) == str(user_id)]
         except: return []
 
 gm = GoogleSheetManager()
 
-# [수정됨] 더 강력한 문장 분리기 (줄바꿈도 문장으로 인식)
+# ---------------------------------------------------------
+# 2. 텍스트 처리 헬퍼 함수
+# ---------------------------------------------------------
 def split_text_basic(text):
     if not text: return []
     # 줄바꿈을 마침표로 치환해서 문장이 끊기도록 유도
@@ -124,6 +144,9 @@ def extract_blank_words(text):
     candidates = [w.strip(".,?!'\"") for w in words if len(w) >= 2]
     return list(set(candidates))
 
+# ---------------------------------------------------------
+# 3. 라우트 (페이지 이동)
+# ---------------------------------------------------------
 @app.route('/')
 def index():
     if 'user_id' in session: return redirect(url_for('lobby'))
@@ -148,7 +171,7 @@ def login():
 def register():
     uid = request.form.get('new_id')
     upw = request.form.get('new_pw')
-    if gm.register(uid, upw): flash("등록 완료"); 
+    if gm.register(uid, upw): flash("등록 완료")
     else: flash("이미 존재하는 ID")
     return redirect(url_for('index'))
 
@@ -167,70 +190,77 @@ def dungeon():
     if 'user_id' not in session: return redirect(url_for('index'))
     
     if request.method == 'POST':
+        # 1. 퀘스트 선택 로직 (디버깅 강화)
         if 'quest_select' in request.form:
             q_name = request.form['quest_select']
-            print(f"\n=== [디버깅 시작] 사용자가 선택한 퀘스트: '{q_name}' ===")
+            print(f"\n=== [DEBUG] 사용자 선택: {q_name} ===")
 
-            quests = gm.get_quest_list()
-            print(f"--- 시트에서 가져온 퀘스트 개수: {len(quests)}개 ---")
+            if q_name == "선택 안함": 
+                flash("퀘스트를 선택해주세요.")
+                return redirect(url_for('dungeon'))
             
-            # 시트 내용 전체를 한번 출력해봅니다 (키값 확인용)
-            if len(quests) > 0:
-                print(f"--- 첫 번째 퀘스트 데이터 샘플: {quests[0]} ---")
+            quests = gm.get_quest_list()
+            print(f"--- 시트에서 로드된 퀘스트: {len(quests)}개 ---")
 
-            found = False
-            target_content = ""
-
+            # 시트 키값과 유저 선택값을 안전하게 비교
+            selected_quest = None
             for q in quests:
-                # 시트의 키값(quest_name)과 사용자의 선택을 비교
-                # 혹시 키값이 'quest_name'이 아니라 'quest name' 등으로 되어있는지 확인
-                sheet_q_name = str(q.get('quest_name', '키값_못찾음'))
-                print(f"비교중: 시트('{sheet_q_name}') vs 유저('{q_name}')")
-                
-                if sheet_q_name.strip() == q_name.strip():
-                    target_content = q.get('content', "")
-                    found = True
+                # 시트의 A열 키 이름이 quest_name 인지 확인
+                sheet_name = str(q.get('quest_name', '')).strip()
+                if sheet_name == str(q_name).strip():
+                    selected_quest = q
                     break
             
-            if not found:
-                print("❌ [실패] 이름이 일치하는 퀘스트를 못 찾았습니다.")
-                flash("퀘스트 정보를 찾을 수 없습니다.")
+            if not selected_quest:
+                print(f"!!! [ERROR] '{q_name}'을 시트에서 찾을 수 없습니다. (헤더 'quest_name' 확인 필요)")
+                flash("퀘스트 데이터를 찾을 수 없습니다.")
                 return redirect(url_for('dungeon'))
 
-            if not target_content:
-                print("❌ [실패] 퀘스트는 찾았는데 'content' 내용이 비어있습니다.")
-                flash("퀘스트 내용이 비어있습니다.")
-                return redirect(url_for('dungeon'))
-
-            sents = split_text_basic(target_content)
-            print(f"--- 문장 분리 결과: {len(sents)} 문장 ---")
+            content = selected_quest.get('content', "")
+            sents = split_text_basic(content)
             
-            if not sents:
-                print("❌ [실패] 문장 분리 실패 (내용이 너무 짧거나 마침표/줄바꿈 없음)")
-                flash("내용을 불러올 수 없습니다.")
+            if not sents: 
+                print(f"!!! [ERROR] 내용 분해 실패. 원본: {content[:30]}...")
+                flash("퀘스트 내용이 없거나 너무 짧습니다.")
                 return redirect(url_for('dungeon'))
                 
             session['quest_sents'] = sents
             session['q_idx'] = 0
             session['quest_name'] = q_name
             
-            print("✅ [성공] 플레이 화면으로 이동합니다!")
+            print("✅ [성공] 플레이 화면으로 이동!")
             return redirect(url_for('dungeon_play'))
-
-        # ... (새 퀘스트 만들기 부분은 그대로 두셔도 됩니다) ...
+            
+        # 2. 퀘스트 생성 로직
         elif 'new_q_name' in request.form:
-             # 기존 코드 유지
-             pass
+            name = request.form['new_q_name']
+            f = request.files['new_q_file']
+            if name and f:
+                content = f.read().decode('utf-8')
+                if not content.strip():
+                    flash("내용이 빈 파일입니다.")
+                elif gm.save_quest(name, content, session['user_id']): 
+                    flash("저장 완료")
+                else: 
+                    flash("중복된 이름이거나 저장 실패")
+            return redirect(url_for('dungeon'))
 
     quests = gm.get_quest_list()
     return render_template('dungeon.html', quests=quests)
+
+@app.route('/dungeon/play', methods=['GET', 'POST'])
 def dungeon_play():
     if 'quest_sents' not in session: return redirect(url_for('dungeon'))
+    
     if request.method == 'GET':
+        if not session['quest_sents']: return redirect(url_for('dungeon'))
+        
+        # 인덱스가 범위를 벗어나지 않게 순환
         curr_sent = session['quest_sents'][session['q_idx'] % len(session['quest_sents'])]
         
         candidates = extract_blank_words(curr_sent)
         
+        # 빈칸 뚫을 단어가 없으면 다음 문장으로 패스
         if not candidates:
             session['q_idx'] += 1
             return redirect(url_for('dungeon_play'))
@@ -280,4 +310,5 @@ def collection():
     return render_template('collection.html', cards=cards)
 
 if __name__ == '__main__':
+    # 로컬 테스트용 (Render에서는 gunicorn이 실행하므로 이 부분은 무시됨)
     app.run(host='0.0.0.0', port=10000)
