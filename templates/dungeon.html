@@ -1,28 +1,50 @@
-{% extends "layout.html" %}
-{% block content %}
-    <h2>📜 금지된 지식의 서</h2>
-    
-    <div class="card">
-        <h3>주문서 해독</h3>
-        <form action="/dungeon" method="POST">
-            <input type="hidden" name="load_quest" value="1">
-            <select name="quest_select" style="width:100%; padding:10px; background:#222; color:#e8dcb5; border:1px solid #d4af37; border-radius:5px; margin-bottom:10px;">
-                <option>선택 안함</option>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>던전 입구</title>
+    <style>
+        body { font-family: 'Pretendard', sans-serif; background-color: #1a1a1a; color: #fff; padding: 20px; text-align: center; }
+        .container { max-width: 600px; margin: 0 auto; background: #2a2a2a; padding: 20px; border-radius: 15px; }
+        select, input { width: 90%; padding: 12px; margin: 10px 0; background: #333; border: 1px solid #555; color: #fff; border-radius: 5px; }
+        button { width: 100%; padding: 12px; margin-top: 10px; background: #ffd700; color: #000; border: none; font-weight: bold; border-radius: 5px; cursor: pointer; }
+        h3 { border-bottom: 2px solid #444; padding-bottom: 10px; margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <h1>🏰 던전 입구</h1>
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            {% for message in messages %}
+                <div style="color: #ff6b6b; font-weight: bold; margin-bottom: 15px;">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="container">
+        <h3>⚔️ 퀘스트 목록</h3>
+        <form method="POST">
+            <select name="quest_select">
+                <option selected>선택 안함</option>
                 {% for q in quests %}
-                <option value="{{ q.quest_name }}">{{ q.quest_name }}</option>
+                    <option value="{{ q.quest_name }}">{{ q.quest_name }}</option>
                 {% endfor %}
             </select>
-            <button class="btn">✨ 해독 시작</button>
+            <button type="submit">입장하기</button>
         </form>
-    </div>
 
-    <div class="card" style="margin-top:30px;">
-        <h3>새 주문서 기록</h3>
-        <form action="/dungeon" method="POST" enctype="multipart/form-data">
-            <input type="hidden" name="save_quest" value="1">
-            <input type="text" name="new_q_name" placeholder="주문서 이름" required>
-            <input type="file" name="new_q_file" accept=".txt" style="color:#aaa; margin:10px auto;" required>
-            <button class="btn" style="border-color:#666; color:#aaa;">기록하기</button>
+        <h3>📂 새 퀘스트 등록 (파일 업로드)</h3>
+        <p style="font-size: 0.8rem; color: #aaa;">
+            텍스트 파일을 올리면 엔터(줄바꿈) 단위로<br>
+            자동으로 퀘스트가 나누어 생성됩니다.<br>
+            (예: 민법 텍스트파일 -> 민법-1, 민법-2...)
+        </p>
+        <form method="POST" enctype="multipart/form-data">
+            <input type="text" name="new_q_name" placeholder="퀘스트 제목 (예: 민법, 형법)" required>
+            <input type="file" name="new_q_file" accept=".txt" required>
+            <button type="submit" style="background: #4a90e2; color: white;">일괄 등록하기</button>
         </form>
     </div>
-{% endblock %}
+</body>
+</html>
