@@ -1,30 +1,69 @@
 {% extends "layout.html" %}
-{% block content %}
-    <div style="text-align:center; margin: 20px 0;">
-        <div style="font-size: 80px; filter: drop-shadow(0 0 15px rgba(212,175,55,0.4)); animation: float 3s infinite ease-in-out;">
-            {% if level < 5 %}📜
-            {% elif level < 10 %}🧿
-            {% elif level < 20 %}🔮
-            {% else %}🧙‍♂️{% endif %}
-        </div>
-        <h2>Lv.{{ level }} {{ user_id }}</h2>
-        
-        <div style="background:#222; border-radius:10px; height:15px; width:100%; margin: 15px 0; border:1px solid #555; overflow:hidden;">
-            <div style="background:linear-gradient(to right, #4b0082, #00ffff); height:100%; width:{{ (xp / req_xp * 100)|int }}%;"></div>
-        </div>
-        <div style="text-align:right; font-size:0.8rem; color:#aaa;">마력: {{ xp }} / {{ req_xp }}</div>
-    </div>
 
-    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 30px;">
-        <a href="/dungeon" style="text-decoration:none;">
-            <div class="btn" style="text-align:center;">⚔️ 금지된 서고</div>
-        </a>
-        <a href="/collection" style="text-decoration:none;">
-            <div class="btn" style="text-align:center;">📖 아카식 레코드</div>
-        </a>
+{% block content %}
+<style>
+    .profile-card {
+        text-align: center;
+        padding: 40px 0;
+        animation: fadeIn 1s ease-in;
+    }
+    .level-badge {
+        font-size: 5rem; 
+        margin-bottom: 20px;
+        filter: drop-shadow(0 0 20px rgba(212,175,55,0.6));
+        animation: float 3s infinite ease-in-out;
+    }
+    .progress-container {
+        background: #111;
+        border-radius: 15px;
+        height: 25px;
+        width: 100%;
+        margin: 20px 0;
+        border: 1px solid #444;
+        overflow: hidden;
+        position: relative;
+    }
+    .progress-bar {
+        background: linear-gradient(90deg, #4b0082, #d4af37);
+        height: 100%;
+        width: {{ (xp / req_xp * 100)|int }}%;
+        transition: width 1s ease-in-out;
+    }
+    .stats {
+        display: flex;
+        justify-content: space-between;
+        color: #888;
+        font-family: 'Cinzel Decorative';
+        font-size: 1.1rem;
+    }
+    
+    @keyframes float { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-15px);} }
+    @keyframes fadeIn { from{opacity:0;} to{opacity:1;} }
+</style>
+
+<div class="profile-card">
+    <div class="level-badge">
+        {% if level < 5 %}📜
+        {% elif level < 10 %}🧿
+        {% elif level < 20 %}🔮
+        {% else %}🧙‍♂️{% endif %}
     </div>
     
-    <style>
-        @keyframes float { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-10px);} }
-    </style>
+    <h1>{{ user_id }} <span style="font-size:0.6em; color:#888;">(Lv.{{ level }})</span></h1>
+    
+    <div class="progress-container">
+        <div class="progress-bar"></div>
+    </div>
+    
+    <div class="stats">
+        <span>Current Magic (XP)</span>
+        <span style="color:#d4af37">{{ xp }} / {{ req_xp }}</span>
+    </div>
+
+    <hr style="border-color: #333; margin-top: 40px;">
+    
+    <p style="color: #aaa; margin-top: 20px;">
+        "상단 메뉴를 통해 훈련할 서고(던전)를 선택하거나<br>획득한 지식을 확인하세요."
+    </p>
+</div>
 {% endblock %}
