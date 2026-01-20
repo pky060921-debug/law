@@ -1,25 +1,139 @@
 {% extends "layout.html" %}
+
 {% block content %}
-    <h2>📖 아카식 레코드</h2>
+<style>
+    /* 카드 그리드 */
+    .card-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 20px;
+        margin-top: 30px;
+    }
     
-    {% if not cards %}
-        <p style="text-align:center; color:#aaa; margin-top:50px;">기록된 지식이 없습니다.</p>
-    {% else %}
-        {% for c in cards %}
-            {% set color = '#cd7f32' %}
-            {% if c.grade == 'LEGEND' %}{% set color = '#FFD700' %}
-            {% elif c.grade == 'RARE' %}{% set color = '#00FFFF' %}{% endif %}
-            
-            <div class="card" style="border-color: {{ color }}; box-shadow: 0 0 10px {{ color }}40;">
-                <div style="display:flex; justify-content:space-between; margin-bottom:10px; font-weight:bold;">
-                    <span style="color:{{ color }};">{{ c.grade }}</span>
-                    <span style="color:#aaa;">Lv.{{ c.count }}</span>
-                </div>
-                <div style="font-size:1.1rem; margin-bottom:10px;">{{ c.card_text }}</div>
-                <div style="text-align:right; font-size:0.8rem; color:#666; font-style:italic;">
-                    출처: {{ c.quest_name }}
-                </div>
-            </div>
-        {% endfor %}
-    {% endif %}
+    .card {
+        background: #ecf0f1;
+        color: #2c3e50;
+        border-radius: 10px;
+        padding: 15px;
+        text-align: center;
+        position: relative;
+        border-bottom: 5px solid #bdc3c7;
+        transition: transform 0.2s;
+    }
+    .card:hover { transform: translateY(-5px); }
+
+    /* 등급별 스타일 */
+    .card.NORMAL { border-top: 5px solid #95a5a6; }
+    .card.RARE { border-top: 5px solid #3498db; background: #eaf2f8; }
+    .card.LEGEND { border-top: 5px solid #f1c40f; background: #fcf3cf; }
+
+    .grade-badge {
+        font-size: 0.8rem;
+        font-weight: bold;
+        padding: 2px 8px;
+        border-radius: 10px;
+        display: inline-block;
+        margin-bottom: 10px;
+        color: white;
+    }
+    .NORMAL .grade-badge { background: #95a5a6; }
+    .RARE .grade-badge { background: #3498db; }
+    .LEGEND .grade-badge { background: #f1c40f; color: #333; }
+
+    /* 교환 버튼 */
+    .btn-exchange {
+        width: 100%;
+        margin-top: 10px;
+        padding: 8px;
+        border: none;
+        border-radius: 5px;
+        background: #e67e22;
+        color: white;
+        font-family: 'Do Hyeon';
+        cursor: pointer;
+        transition: 0.2s;
+    }
+    .btn-exchange:hover { background: #d35400; }
+
+    /* 포인트 정보 */
+    .my-points {
+        text-align: right;
+        font-size: 1.5rem;
+        color: #f1c40f;
+        margin-bottom: 10px;
+        text-shadow: 1px 1px 0 #000;
+    }
+</style>
+
+<h1>🃏 카드 교환소</h1>
+<div class="my-points">
+    내 지갑: <span id="current-points">{{ points }}</span> P
+</div>
+<p style="text-align:center; color:#bdc3c7;">
+    모은 카드를 포인트로 교환할 수 있습니다.<br>
+    (레벨이 높을수록 카드의 가치가 올라갑니다!)
+</p>
+
+{% if cards %}
+<div class="card-grid">
+    {% for card in cards %}
+    <div class="card {{ card.grade }}" id="card-{{ loop.index }}">
+        <span class="grade-badge">{{ card.grade }}</span>
+        <div style="font-size: 1.2rem; font-weight: bold; margin: 10px 0; min-height: 50px; display:flex; align-items:center; justify-content:center;">
+            {{ card.card_text }}
+        </div>
+        <div style="color: #7f8c8d; font-size: 0.9rem;">
+            보유량: <b id="count-{{ loop.index }}">{{ card.count }}</b>장
+        </div>
+        
+        <button class="btn-exchange" onclick="exchangeCard('{{ card.card_text }}', {{ loop.index }})">
+            💰 교환하기
+        </button>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div style="text-align:center; padding:50px; color:#95a5a6;">
+    아직 획득한 카드가 없습니다.<br>
+    스테이지를 클리어하여 카드를 모으세요!
+</div>
+{% endif %}
+
+<script>
+    function exchangeCard(cardText, index) {
+        if(!confirm(`'${cardText}' 카드를 포인트로 교환하시겠습니까?`)) return;
+
+        fetch('/exchange', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ card_text: cardText })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // UI 업데이트
+                alert(`교환 성공! +${data.earned} 포인트를 얻었습니다.`);
+                document.getElementById('current-points').innerText = data.new_total;
+                
+                // 수량 감소 처리
+                const countEl = document.getElementById(`count-${index}`);
+                let currentCount = parseInt(countEl.innerText);
+                currentCount--;
+                
+                if (currentCount <= 0) {
+                    // 카드 제거
+                    document.getElementById(`card-${index}`).remove();
+                } else {
+                    countEl.innerText = currentCount;
+                }
+            } else {
+                alert('교환 실패: ' + data.msg);
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('오류가 발생했습니다.');
+        });
+    }
+</script>
 {% endblock %}
