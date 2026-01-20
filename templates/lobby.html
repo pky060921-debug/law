@@ -4,66 +4,74 @@
 <style>
     .profile-card {
         text-align: center;
-        padding: 40px 0;
-        animation: fadeIn 1s ease-in;
+        padding: 30px 0;
     }
     .level-badge {
-        font-size: 5rem; 
-        margin-bottom: 20px;
-        filter: drop-shadow(0 0 20px rgba(212,175,55,0.6));
-        animation: float 3s infinite ease-in-out;
+        font-size: 6rem; 
+        margin-bottom: 10px;
+        animation: bounce 2s infinite;
     }
-    .progress-container {
-        background: #111;
-        border-radius: 15px;
-        height: 25px;
+    .progress-bg {
+        background: #2c3e50;
+        border-radius: 20px;
+        height: 30px;
         width: 100%;
-        margin: 20px 0;
-        border: 1px solid #444;
+        margin: 15px 0;
+        border: 2px solid #7f8c8d;
         overflow: hidden;
-        position: relative;
     }
     .progress-bar {
-        background: linear-gradient(90deg, #4b0082, #d4af37);
+        background: linear-gradient(90deg, #2ecc71, #27ae60);
         height: 100%;
         width: {{ (xp / req_xp * 100)|int }}%;
         transition: width 1s ease-in-out;
     }
-    .stats {
-        display: flex;
-        justify-content: space-between;
-        color: #888;
-        font-family: 'Cinzel Decorative';
-        font-size: 1.1rem;
-    }
     
-    @keyframes float { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-15px);} }
-    @keyframes fadeIn { from{opacity:0;} to{opacity:1;} }
+    /* 포인트 표시 박스 */
+    .point-box {
+        background: #f1c40f;
+        color: #2c3e50;
+        padding: 15px;
+        border-radius: 15px;
+        display: inline-block;
+        margin-top: 20px;
+        font-size: 1.5rem;
+        border-bottom: 5px solid #d35400;
+        font-weight: bold;
+    }
+
+    @keyframes bounce { 
+        0%, 100% { transform: translateY(0); } 
+        50% { transform: translateY(-10px); } 
+    }
 </style>
 
 <div class="profile-card">
     <div class="level-badge">
-        {% if level < 5 %}📜
-        {% elif level < 10 %}🧿
-        {% elif level < 20 %}🔮
-        {% else %}🧙‍♂️{% endif %}
+        {% if level < 10 %}🐣
+        {% elif level < 30 %}⚔️
+        {% elif level < 50 %}🏰
+        {% else %}👑{% endif %}
     </div>
     
-    <h1>{{ user_id }} <span style="font-size:0.6em; color:#888;">(Lv.{{ level }})</span></h1>
+    <h1>{{ user_id }} <span style="font-size:0.6em; color:#bdc3c7;">(Lv.{{ level }})</span></h1>
     
-    <div class="progress-container">
+    <div class="progress-bg">
         <div class="progress-bar"></div>
     </div>
-    
-    <div class="stats">
-        <span>Current Magic (XP)</span>
-        <span style="color:#d4af37">{{ xp }} / {{ req_xp }}</span>
+    <div style="display:flex; justify-content:space-between; color:#bdc3c7;">
+        <span>EXP</span>
+        <span>{{ xp }} / {{ req_xp }}</span>
     </div>
 
-    <hr style="border-color: #333; margin-top: 40px;">
+    <div class="point-box">
+        💰 보유 포인트: <span style="font-size: 1.8rem;">{{ points }} P</span>
+    </div>
+
+    <hr style="border-color: #7f8c8d; margin-top: 40px; opacity: 0.5;">
     
-    <p style="color: #aaa; margin-top: 20px;">
-        "상단 메뉴를 통해 훈련할 서고(던전)를 선택하거나<br>획득한 지식을 확인하세요."
+    <p style="color: #95a5a6; margin-top: 20px; font-size: 1.1rem;">
+        "빈칸을 채워 카드를 모으고, 포인트로 교환하세요!"
     </p>
 </div>
 {% endblock %}
