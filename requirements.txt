@@ -1,4 +1,6 @@
-Flask
+flask
+gunicorn
 gspread
 oauth2client
-gunicorn
+authlib
+requests
