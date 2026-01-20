@@ -8,17 +8,17 @@
     <style>
         /* [빈칸맨 히어로 테마] */
         body {
-            background-color: #1a252f; /* 짙은 네이비 */
+            background-color: #1a252f;
             color: #ecf0f1;
-            font-family: 'Jua', sans-serif; /* 둥글고 잘 보이는 폰트 */
+            font-family: 'Jua', sans-serif;
             margin: 0; 
             min-height: 100vh;
-            font-size: 18px; /* 기본 글씨 크기 확대 */
+            font-size: 18px; /* 기본(PC) 글씨 크기 */
         }
 
         /* 상단 네비게이션 */
         nav {
-            background: #f39c12; /* 히어로 옐로우 */
+            background: #f39c12;
             border-bottom: 4px solid #d35400;
             padding: 12px 0;
             position: sticky;
@@ -51,7 +51,7 @@
         .container {
             max-width: 900px;
             margin: 40px auto;
-            background-color: #2c3e50; /* 컨텐츠 배경 */
+            background-color: #2c3e50;
             border: 3px solid #34495e;
             border-radius: 20px;
             padding: 40px;
@@ -66,7 +66,6 @@
             margin-top: 0;
         }
 
-        /* 알림 메시지 */
         .flash { 
             background: #e74c3c;
             border: 2px solid #c0392b;
@@ -79,15 +78,33 @@
             font-weight: bold;
             box-shadow: 0 4px 10px rgba(0,0,0,0.2);
         }
+
+        /* [모바일 최적화 - 핵심 변경 부분] */
+        @media (max-width: 768px) {
+            body {
+                font-size: 15px; /* 모바일에서는 기본 글씨를 줄임 */
+            }
+            .container {
+                margin: 10px;      /* 바깥 여백 줄임 */
+                padding: 20px 15px; /* 안쪽 여백 줄임 -> 글씨 공간 확보 */
+                border-width: 2px;
+            }
+            .nav-link {
+                font-size: 1.1rem; /* 메뉴 글씨 줄임 */
+                padding: 5px 8px;
+                margin: 0 3px;
+            }
+            h1 { font-size: 1.8rem; } /* 제목 크기 줄임 */
+            h2 { font-size: 1.5rem; }
+        }
     </style>
 </head>
 <body>
-
     {% if session.user_id %}
     <nav>
-        <a href="/lobby" class="nav-link">🏠 본부(로비)</a>
-        <a href="/dungeon" class="nav-link">⚡ 작전지역</a>
-        <a href="/collection" class="nav-link">🦸 카드도감</a>
+        <a href="/lobby" class="nav-link">🏠 로비</a>
+        <a href="/dungeon" class="nav-link">⚡ 던전</a>
+        <a href="/collection" class="nav-link">🦸 도감</a>
         <a href="/logout" class="nav-link" style="color: #c0392b;">🚪 퇴근</a>
     </nav>
     {% endif %}
@@ -98,9 +115,7 @@
                 <div class="flash">{{ messages[0] }}</div>
             {% endif %}
         {% endwith %}
-        
         {% block content %}{% endblock %}
     </div>
-
 </body>
 </html>
