@@ -12,7 +12,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'lord_of_blanks_key')
 
-# Render 배포 시 HTTPS 인식 설정
+# [중요] Render 배포 시 HTTPS 인식을 위해 필수 설정
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # --- 구글 OAuth 설정 ---
@@ -33,6 +33,7 @@ class GoogleSheetManager:
         self.users_ws = None
         self.quests_ws = None
         self.collections_ws = None
+        # 사용할 유저 시트 헤더 정의
         self.USER_HEADERS = ["user_id", "password", "level", "xp", "title", "last_idx", "points"]
         self.connect_db() 
 
@@ -52,6 +53,7 @@ class GoogleSheetManager:
             try: self.users_ws = self.sheet.worksheet("users")
             except: self.users_ws = self.sheet.add_worksheet("users", 100, 10)
             
+            # 헤더가 없으면 추가
             if not self.users_ws.get_all_values():
                 self.users_ws.append_row(self.USER_HEADERS)
 
@@ -71,6 +73,7 @@ class GoogleSheetManager:
         if self.users_ws is None: return self.connect_db()
         return True
 
+    # [핵심] 빈칸 헤더 에러 방지 함수
     def get_safe_records(self, worksheet, headers_list):
         try:
             rows = worksheet.get_all_values()
@@ -93,6 +96,7 @@ class GoogleSheetManager:
             records = self.get_safe_records(self.users_ws, self.USER_HEADERS)
             for i, row in enumerate(records):
                 if str(row['user_id']) == str(user_id):
+                    # 숫자 안전 변환
                     try: row['points'] = int(row.get('points', 0) or 0)
                     except: row['points'] = 0
                     try: row['level'] = int(row.get('level', 1) or 1)
