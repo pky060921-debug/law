@@ -6,9 +6,21 @@ import re
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+from authlib.integrations.flask_client import OAuth  # [필수] OAuth 라이브러리 추가
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'lord_of_blanks_key')
+
+# --- [추가] 구글 OAuth 설정 ---
+app.config['GOOGLE_CLIENT_ID'] = os.environ.get('GOOGLE_CLIENT_ID')
+app.config['GOOGLE_CLIENT_SECRET'] = os.environ.get('GOOGLE_CLIENT_SECRET')
+
+oauth = OAuth(app)
+google_auth = oauth.register(
+    name='google',
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid email profile'}
+)
 
 ACTIVE_GAMES = {}
 
@@ -18,9 +30,10 @@ class GoogleSheetManager:
         self.quests_ws = None
         self.collections_ws = None
         try:
+            # 환경변수에서 인증 정보 가져오기
             json_creds = os.environ.get('GCP_CREDENTIALS')
             if not json_creds:
-                print("🚫 GCP 자격 증명 없음")
+                print("🚫 GCP 자격 증명(GCP_CREDENTIALS)이 없습니다.")
                 return
             
             creds_dict = json.loads(json_creds)
@@ -29,28 +42,24 @@ class GoogleSheetManager:
             self.client = gspread.authorize(creds)
             self.sheet = self.client.open("memory_game_db")
 
-            # 시트 초기화 (users에 points 컬럼 추가를 위해 헤더 확인 필요하지만, 여기선 순서대로 가정)
-            # users: [user_id, password, level, xp, title, last_idx, points]
             try: self.users_ws = self.sheet.worksheet("users")
             except: 
                 self.users_ws = self.sheet.add_worksheet("users", 100, 10)
-                self.users_ws.append_row(["user_id", "password", "level", "xp", "title", "last_idx", "points"])
+                # 헤더가 없으면 추가
+                if not self.users_ws.get_all_values():
+                    self.users_ws.append_row(["user_id", "password", "level", "xp", "title", "last_idx", "points"])
 
             try: self.collections_ws = self.sheet.worksheet("collections")
-            except: 
-                self.collections_ws = self.sheet.add_worksheet("collections", 100, 10)
-                self.collections_ws.append_row(["user_id", "card_text", "grade", "collected_at", "quest_name", "count"])
+            except: self.collections_ws = self.sheet.add_worksheet("collections", 100, 10)
 
             try: self.quests_ws = self.sheet.worksheet("quests")
-            except: 
-                self.quests_ws = self.sheet.add_worksheet("quests", 100, 5)
-                self.quests_ws.append_row(["quest_name", "content", "created_by", "created_at"])
+            except: self.quests_ws = self.sheet.add_worksheet("quests", 100, 5)
 
             print("✅ 구글 시트 연결 성공")
         except Exception as e:
             print(f"❌ 시트 연결 에러: {e}")
 
-    # ... (get_quest_list, update_quest_content 등 기존 함수 유지) ...
+    # --- 기존 메서드 ---
     def get_quest_list(self):
         if self.quests_ws is None: return []
         try: return self.quests_ws.get_all_records()
@@ -62,9 +71,8 @@ class GoogleSheetManager:
             if cell:
                 self.quests_ws.update_cell(cell.row, 2, new_content)
                 return True
-        except Exception as e: print(f"업데이트 에러: {e}")
-        return False
-        
+        except: return False
+
     def save_split_quests(self, title_prefix, lines, creator):
         if self.quests_ws is None: return False
         try:
@@ -81,20 +89,45 @@ class GoogleSheetManager:
                 self.quests_ws.append_rows(rows_to_add)
                 return True, len(rows_to_add)
             return False, 0
-        except Exception as e: return False, 0
+        except: return False, 0
 
+    # --- 로그인/회원가입 메서드 ---
     def login(self, user_id, password):
         if self.users_ws is None: return None, None
         try:
             records = self.users_ws.get_all_records()
             for i, row in enumerate(records):
                 if str(row['user_id']) == str(user_id) and str(row['password']) == str(password):
-                    # 포인트 필드가 없으면 0으로 처리
+                    # 포인트 필드 처리
                     row['points'] = row.get('points', 0)
                     if row['points'] == '': row['points'] = 0
                     return row, i + 2
         except: pass
         return None, None
+
+    # [추가] 소셜 로그인용 유저 조회
+    def get_user_by_id(self, user_id):
+        if self.users_ws is None: return None, None
+        try:
+            records = self.users_ws.get_all_records()
+            for i, row in enumerate(records):
+                if str(row['user_id']) == str(user_id):
+                    row['points'] = row.get('points', 0)
+                    if row['points'] == '': row['points'] = 0
+                    return row, i + 2
+        except: pass
+        return None, None
+
+    # [추가] 소셜 회원가입
+    def register_social(self, user_id):
+        if self.users_ws is None: return False
+        try:
+            records = self.users_ws.get_all_records()
+            for row in records:
+                if str(row['user_id']) == str(user_id): return True
+            self.users_ws.append_row([user_id, "SOCIAL_LOGIN", 1, 0, "빈칸 견습생", 0, 0])
+            return True
+        except: return False
 
     def register(self, user_id, password):
         if self.users_ws is None: return False
@@ -102,11 +135,11 @@ class GoogleSheetManager:
             records = self.users_ws.get_all_records()
             for row in records:
                 if str(row['user_id']) == str(user_id): return False
-            # 초기 포인트 0 지급
             self.users_ws.append_row([user_id, password, 1, 0, "빈칸 견습생", 0, 0])
             return True
         except: return False
 
+    # --- 보상/교환 메서드 ---
     def process_reward(self, user_id, card_text, current_level, current_xp, row_idx, quest_name):
         if self.collections_ws is None: return "ERROR", 0, current_level, current_xp, "ERROR", 0
         
@@ -164,7 +197,6 @@ class GoogleSheetManager:
         try: return [c for c in self.collections_ws.get_all_records() if str(c['user_id']) == str(user_id)]
         except: return []
 
-    # [신규] 카드 교환(판매) 로직
     def exchange_card(self, user_id, user_row_idx, card_text, current_points, current_level):
         if self.collections_ws is None: return False, 0, 0
         
@@ -179,29 +211,22 @@ class GoogleSheetManager:
                 break
         
         if found_idx != -1 and target_row['count'] > 0:
-            # 1. 포인트 계산 로직 (등급 * 레벨)
             grade = target_row.get('grade', 'NORMAL')
             base_point = 10
             if grade == 'RARE': base_point = 50
             elif grade == 'LEGEND': base_point = 200
             
-            # 레벨이 높을수록 가치가 올라감
             earned_points = base_point * current_level
-            
-            # 2. 카드 개수 차감
             new_count = target_row['count'] - 1
             if new_count <= 0:
-                self.collections_ws.delete_rows(found_idx) # 다 팔면 삭제
+                self.collections_ws.delete_rows(found_idx)
             else:
                 self.collections_ws.update_cell(found_idx, 6, new_count)
                 
-            # 3. 유저 포인트 업데이트
             new_total_points = current_points + earned_points
-            # users 시트의 G열(7번째)이 points라고 가정
             self.users_ws.update_cell(user_row_idx, 7, new_total_points)
             
             return True, earned_points, new_total_points
-            
         return False, 0, current_points
 
 gm = GoogleSheetManager()
@@ -231,6 +256,45 @@ def index():
     if 'user_id' in session: return redirect(url_for('lobby'))
     return render_template('login.html')
 
+# [추가] 구글 로그인 라우트
+@app.route('/google/login')
+def google_login():
+    redirect_uri = url_for('google_callback', _external=True)
+    return google_auth.authorize_redirect(redirect_uri)
+
+# [추가] 구글 로그인 콜백 라우트
+@app.route('/google/callback')
+def google_callback():
+    try:
+        token = google_auth.authorize_access_token()
+        user_info = token.get('userinfo')
+        
+        user_email = user_info['email']
+        
+        # 1. DB에 유저가 있는지 확인
+        user_data, row_idx = gm.get_user_by_id(user_email)
+        
+        # 2. 없으면 자동 회원가입
+        if not user_data:
+            gm.register_social(user_email)
+            user_data, row_idx = gm.get_user_by_id(user_email)
+            
+        # 3. 세션 로그인 처리
+        if user_data:
+            session['user_id'] = user_email
+            session['user_row_idx'] = row_idx
+            session['level'] = user_data['level']
+            session['xp'] = user_data['xp']
+            session['points'] = user_data.get('points', 0)
+            flash(f"환영합니다, {user_info.get('name', '히어로')}님!")
+            return redirect(url_for('lobby'))
+            
+    except Exception as e:
+        print(f"로그인 에러: {e}")
+        flash("구글 로그인에 실패했습니다.")
+        
+    return redirect(url_for('index'))
+
 @app.route('/login', methods=['POST'])
 def login():
     uid = request.form.get('id')
@@ -242,15 +306,20 @@ def login():
         session['user_row_idx'] = row_idx
         session['level'] = user_data['level']
         session['xp'] = user_data['xp']
-        session['points'] = user_data.get('points', 0) # 포인트 세션 저장
+        session['points'] = user_data.get('points', 0)
         return redirect(url_for('lobby'))
+    
+    flash("로그인 실패! 아이디/비번을 확인하거나 서버 설정을 확인하세요.")
     return redirect(url_for('index'))
 
 @app.route('/register', methods=['POST'])
 def register():
     uid = request.form.get('new_id')
     upw = request.form.get('new_pw')
-    gm.register(uid, upw)
+    if gm.register(uid, upw):
+        flash("가입 성공! 로그인해주세요.")
+    else:
+        flash("가입 실패 (이미 존재하는 아이디)")
     return redirect(url_for('index'))
 
 @app.route('/logout')
@@ -303,7 +372,7 @@ def dungeon():
                 lines = raw_text.replace('\r\n', '\n').split('\n')
                 success, count = gm.save_split_quests(title_prefix, lines, session['user_id'])
                 if success: flash(f"{count}개의 스테이지 생성 완료!")
-                else: flash("생성 실패")
+                else: flash("저장 실패")
             return redirect(url_for('dungeon'))
 
     quests = gm.get_quest_list()
@@ -344,12 +413,10 @@ def dungeon_play():
                 session['user_id'], clean_text, session['level'], session['xp'], 
                 session['user_row_idx'], game_data['quest_name']
             )
-            
             final_gain = max(1, base_gain - (penalty_count * 2))
             session['level'] = nl
             session['xp'] = nx - (base_gain - final_gain)
-            
-            flash(f"🎉 스테이지 클리어! (+{final_gain} XP)")
+            flash(f"🎉 클리어! (+{final_gain} XP)")
             return redirect(url_for('dungeon'))
 
 @app.route('/collection')
@@ -381,4 +448,6 @@ def exchange():
         return jsonify({'success': False, 'msg': '교환 실패'})
 
 if __name__ == '__main__':
+    # 로컬 테스트 시 HTTPS 없이 구글 로그인 허용
+    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
     app.run(host='0.0.0.0', port=10000)
