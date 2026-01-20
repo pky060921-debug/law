@@ -3,95 +3,273 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>플레이</title>
+    <title>던전 플레이</title>
     <style>
-        body { font-family: 'Pretendard', sans-serif; background-color: #1a1a1a; color: #fff; text-align: center; padding: 20px; }
-        .game-container { 
-            max-width: 800px; margin: 0 auto; background: #2a2a2a; padding: 30px; 
-            border-radius: 15px; box-shadow: 0 0 20px rgba(0,0,0,0.5); line-height: 2.2; 
+        body { font-family: 'Pretendard', sans-serif; background-color: #1a1a1a; color: #fff; padding: 20px; text-align: center; }
+        .container { max-width: 800px; margin: 0 auto; background: #2a2a2a; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        
+        /* 상단 UI */
+        header { display: flex; justify-content: space-between; border-bottom: 2px solid #444; padding-bottom: 15px; margin-bottom: 20px; }
+        .xp-bar { font-size: 1.2rem; color: #4a90e2; font-weight: bold; }
+        .xp-minus { color: #ff6b6b; animation: floatUp 0.5s ease-out; }
+
+        /* 버튼 스타일 */
+        .btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; color: #fff; transition: 0.2s; }
+        .btn-submit { background: #4a90e2; width: 100%; margin-top: 20px; font-size: 1.1rem; padding: 15px; }
+        .btn-submit:hover { background: #357abd; }
+        .btn-back { background: #555; }
+
+        /* 게임 보드 (텍스트 영역) */
+        #game-board { line-height: 2.8; font-size: 1.15rem; text-align: left; word-break: keep-all; }
+        
+        /* 단어 그룹 (입력창 + 조사) */
+        .word-group { display: inline-block; white-space: nowrap; margin-right: 5px; }
+        .particle { color: #aaa; font-weight: normal; }
+        .prefix { color: #aaa; margin-right: 2px; }
+
+        /* 입력창 스타일 (엄격 모드) */
+        input.quiz-input {
+            background: #333; border: none; border-bottom: 2px solid #555;
+            color: #fff; text-align: center; font-size: 1.1rem; padding: 2px 5px;
+            border-radius: 3px; outline: none; font-family: inherit;
+            transition: all 0.2s;
         }
-        .sentence-box { font-size: 1.2rem; text-align: left; word-break: keep-all; }
+        input.quiz-input:focus { border-bottom-color: #4a90e2; background: #3a3a3a; }
         
+        /* 정답/오답 상태 */
+        input.correct { border-bottom-color: #2ecc71; background: #1e3a29; color: #2ecc71; font-weight: bold; pointer-events: none; }
+        input.error { border-bottom-color: #ff6b6b; background: #3a1e1e; color: #ff6b6b; animation: shake 0.3s; }
+
         /* 편집 모드 스타일 */
-        .word-token { cursor: pointer; padding: 2px 5px; margin: 2px; border-radius: 4px; transition: 0.2s; display: inline-block; }
-        .word-token:hover { background-color: #444; }
-        .word-token.selected { background-color: #ff6b6b; color: white; font-weight: bold; }
-        
-        /* 플레이 모드 스타일 */
-        input { background: transparent; border: none; border-bottom: 2px solid #ffd700; color: #ffd700; text-align: center; font-size: 1.1rem; width: 80px; margin: 0 5px; }
-        input:focus { outline: none; border-bottom: 2px solid #fff; }
-        
-        .btn { display: inline-block; width: 100%; padding: 15px; margin-top: 20px; background: #ffd700; color: #000; border: none; border-radius: 5px; font-weight: bold; font-size: 1.1rem; cursor: pointer; }
-        .flash { color: #ff6b6b; margin-bottom: 15px; font-weight: bold; }
+        .edit-word { cursor: pointer; padding: 2px 4px; border-radius: 4px; border: 1px solid transparent; }
+        .edit-word:hover { background: #444; border-color: #666; }
+        .edit-word.selected { background: #d63031; color: white; border-color: #ff7675; }
+        .edit-word.selected::before { content: '{'; color: #ffcc00; }
+        .edit-word.selected::after { content: '}'; color: #ffcc00; }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-20px); opacity: 0; }
+        }
     </style>
 </head>
 <body>
-    <h1>📜 주문서 해독</h1>
-    
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            {% for message in messages %}
-                <div class="flash">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
+    <div class="container">
+        <header>
+            <a href="/dungeon" class="btn btn-back">🔙 나가기</a>
+            <div class="xp-bar">EXP: <span id="xp-val">{{ session['xp'] }}</span></div>
+        </header>
 
-    <div class="game-container">
-        
         {% if edit_mode %}
-            <h3 style="color: #4a90e2;">👆 1회차: 빈칸으로 만들 단어를 터치하세요!</h3>
-            <div class="sentence-box" id="editor-area">
-                {% for word in words %}
-                    <span class="word-token" onclick="toggleWord(this)">{{ word }}</span>
-                {% endfor %}
-            </div>
+        <div>
+            <h2 style="color: #ffd700;">✏️ 빈칸 만들기</h2>
+            <p style="color:#ccc; font-size:0.9rem;">클릭하여 빈칸으로 만들 핵심 단어를 선택하세요. (조사는 자동으로 분리됩니다)</p>
             
-            <form method="POST" onsubmit="saveEditor()">
-                <input type="hidden" name="edited_content" id="hidden_content">
-                <button type="submit" class="btn" style="background: #4a90e2; color: white;">저장하고 암기 시작</button>
-            </form>
+            <div id="edit-board" style="background:#222; padding:20px; border-radius:10px; min-height:100px; text-align:left; line-height:2.5;"></div>
 
-            <script>
-                function toggleWord(el) {
-                    el.classList.toggle('selected');
-                }
-                function saveEditor() {
-                    const tokens = document.querySelectorAll('.word-token');
-                    let result = [];
-                    tokens.forEach(t => {
-                        if (t.classList.contains('selected')) {
-                            result.push("{" + t.innerText + "}");
-                        } else {
-                            result.push(t.innerText);
+            <form method="POST" id="edit-form">
+                <input type="hidden" name="edited_content" id="edited_content">
+                <button type="button" class="btn btn-submit" onclick="submitEdit()">설정 완료 (게임 시작)</button>
+            </form>
+        </div>
+
+        <script>
+            const rawContent = `{{ raw_content | safe }}`;
+            const editBoard = document.getElementById('edit-board');
+            let tokenData = [];
+
+            // 1. 텍스트 분리 로직 (조사/부호 떼어내기)
+            function parseText(text) {
+                // 줄바꿈 보존을 위해 문단으로 나눔
+                const paragraphs = text.split('\n');
+                let html = '';
+                let globalIdx = 0;
+
+                paragraphs.forEach(para => {
+                    if (!para.trim()) return;
+                    html += '<div style="margin-bottom:10px;">';
+                    const words = para.split(/\s+/);
+                    
+                    words.forEach(word => {
+                        // 정규식: (접두어)(핵심단어)(접미어/부호)
+                        const match = word.match(/^([(\[\"\'\.]*)(.+?)([)\]\"\'\,\.\?]*)$/);
+                        let prefix = match ? match[1] : "";
+                        let core = match ? match[2] : word;
+                        let suffix = match ? match[3] : "";
+
+                        // 조사 분리 (긴 것부터)
+                        const particles = ['으로', '에서', '부터', '까지', '은', '는', '이', '가', '을', '를', '에', '의', '와', '과', '로', '도', '만'];
+                        for (let p of particles) {
+                            if (core.endsWith(p) && core.length > p.length) {
+                                suffix = p + suffix;
+                                core = core.substring(0, core.length - p.length);
+                                break;
+                            }
                         }
+
+                        // 데이터 저장 (나중에 복원용)
+                        tokenData.push({ prefix, core, suffix, selected: false });
+                        
+                        // HTML 생성
+                        html += `<span class="word-group">`;
+                        if(prefix) html += `<span class="prefix">${prefix}</span>`;
+                        html += `<span class="edit-word" onclick="toggleWord(${globalIdx}, this)">${core}</span>`;
+                        if(suffix) html += `<span class="particle">${suffix}</span>`;
+                        html += `</span> `;
+                        globalIdx++;
                     });
-                    // 공백으로 다시 합쳐서 전송
-                    document.getElementById('hidden_content').value = result.join(" ");
-                }
-            </script>
+                    html += '</div>';
+                });
+                editBoard.innerHTML = html;
+            }
+
+            function toggleWord(idx, el) {
+                tokenData[idx].selected = !tokenData[idx].selected;
+                el.classList.toggle('selected');
+            }
+
+            function submitEdit() {
+                // 선택된 단어에 {} 씌워서 텍스트 재조립
+                let finalStr = "";
+                let pIdx = 0; // 줄바꿈 처리를 위해 원본 참조가 필요하지만, 여기선 공백으로 단순 연결
+                
+                // 줄바꿈 구조를 유지하기 어려우므로, tokenData 순서대로 재조립하되 줄바꿈은 소실될 수 있음.
+                // 하지만 app.py 로직상 한 퀘스트는 한 문단(조항)이므로 공백 연결도 무방함.
+                // 더 정확히 하려면 rawContent의 줄바꿈을 추적해야 함. 여기선 단순화.
+                
+                finalStr = tokenData.map(t => {
+                    let w = t.core;
+                    if(t.selected) w = `{${w}}`;
+                    return `${t.prefix}${w}${t.suffix}`;
+                }).join(' ');
+
+                document.getElementById('edited_content').value = finalStr;
+                document.getElementById('edit-form').submit();
+            }
+
+            // 초기 실행
+            parseText(rawContent);
+        </script>
 
         {% else %}
-            <form method="POST" autocomplete="off">
-                <div class="sentence-box">
-                    {% for part in parts %}
-                        {% if part.type == 'text' %}
-                            <span>{{ part.val }}</span>
-                        {% else %}
-                            <input type="text" name="answers" required placeholder="?">
-                        {% endif %}
-                    {% endfor %}
-                </div>
-                
-                {% if has_blanks %}
-                    <button type="submit" class="btn">해독 확인</button>
-                {% else %}
-                    <button type="submit" class="btn">완료 (다음으로)</button>
-                {% endif %}
-                
-                <a href="{{ url_for('dungeon') }}" style="display:block; margin-top:15px; color:#888; font-size:0.9rem;">나가기</a>
+        <div>
+            <div id="game-board">
+                {% for part in parts %}
+                    {% if part.type == 'text' %}
+                        <span>{{ part.val }}</span>
+                    {% else %}
+                        <input type="text" class="quiz-input" 
+                               data-answer="{{ targets[part.id] }}"
+                               style="width: {{ targets[part.id]|length * 16 + 10 }}px;"
+                               autocomplete="off">
+                    {% endif %}
+                {% endfor %}
+            </div>
+
+            <form method="POST" id="game-form" style="display:none;">
+                <input type="hidden" name="penalty_count" id="penalty_count" value="0">
+                {% for t in targets %}
+                    <input type="hidden" name="answers" value="{{ t }}">
+                {% endfor %}
             </form>
+
+            <button onclick="checkFinal()" class="btn btn-submit" id="submit-btn" disabled>모두 채워주세요</button>
+        </div>
+
+        <script>
+            const inputs = document.querySelectorAll('.quiz-input');
+            const xpDisplay = document.getElementById('xp-val');
+            const submitBtn = document.getElementById('submit-btn');
+            let currentXP = {{ session['xp'] }};
+            let penaltyCount = 0;
+
+            inputs.forEach(input => {
+                input.addEventListener('input', function() {
+                    validateInput(this);
+                    checkAllFilled();
+                });
+            });
+
+            function validateInput(input) {
+                const val = input.value;
+                const ans = input.dataAnswer || input.getAttribute('data-answer');
+                
+                // 초기화
+                input.classList.remove('correct', 'error');
+
+                // 1. 정답 체크
+                if (val === ans) {
+                    input.classList.add('correct');
+                    // 다음 칸으로 자동 이동 (선택사항)
+                    // focusNext(input);
+                    return;
+                }
+
+                // 2. 엄격한 오답 체크 (띄어쓰기, 길이 초과, 오타)
+                let isError = false;
+                if (val.includes(' ')) isError = true; // 공백 금지
+                if (val.length > ans.length) isError = true; // 길이 초과
+                if (val.length > 0 && !ans.startsWith(val)) isError = true; // 타이핑 중 오타
+
+                if (isError) {
+                    input.classList.add('error');
+                    triggerPenalty();
+                    // 틀린 글자 지우기 (옵션: 사용자가 직접 지우게 할지, 자동 삭제할지)
+                    // input.value = val.slice(0, -1); 
+                }
+            }
+
+            function triggerPenalty() {
+                // 시각적 효과
+                const minus = document.createElement('span');
+                minus.className = 'xp-minus';
+                minus.innerText = '-2 XP';
+                minus.style.position = 'absolute';
+                minus.style.left = (xpDisplay.getBoundingClientRect().left + 20) + 'px';
+                minus.style.top = (xpDisplay.getBoundingClientRect().top - 20) + 'px';
+                document.body.appendChild(minus);
+                
+                setTimeout(() => minus.remove(), 500);
+
+                // 데이터 처리
+                currentXP -= 2; // 시각적 감소
+                penaltyCount++; // 서버 전송용 카운트
+                xpDisplay.innerText = currentXP;
+                document.getElementById('penalty_count').value = penaltyCount;
+            }
+
+            function checkAllFilled() {
+                const allCorrect = Array.from(inputs).every(i => i.classList.contains('correct'));
+                const allFilled = Array.from(inputs).every(i => i.value.length > 0);
+                
+                if (allCorrect) {
+                    submitBtn.innerText = "🎉 퀘스트 완료! 보상 받기";
+                    submitBtn.disabled = false;
+                    submitBtn.style.background = "#2ecc71";
+                    // 자동 제출 하려면: document.getElementById('game-form').submit();
+                } else {
+                    submitBtn.disabled = true;
+                    submitBtn.innerText = "모두 정확히 채워주세요";
+                    submitBtn.style.background = "#4a90e2";
+                }
+            }
+
+            function checkFinal() {
+                // 폼 제출
+                document.getElementById('game-form').submit();
+            }
+
+            function focusNext(current) {
+                const idx = Array.from(inputs).indexOf(current);
+                if (idx < inputs.length - 1) inputs[idx + 1].focus();
+            }
+        </script>
         {% endif %}
-        
     </div>
 </body>
 </html>
