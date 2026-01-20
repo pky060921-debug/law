@@ -2,76 +2,87 @@
 
 {% block content %}
 <style>
-    .profile-card {
-        text-align: center;
-        padding: 30px 0;
-    }
-    .level-badge {
-        font-size: 6rem; 
+    .profile-card { text-align: center; padding: 20px 0; }
+    
+    /* 히어로 뱃지 애니메이션 */
+    .hero-badge {
+        font-size: 7rem; 
         margin-bottom: 10px;
-        animation: bounce 2s infinite;
+        display: inline-block;
+        filter: drop-shadow(0 0 15px rgba(241, 196, 15, 0.5));
+        animation: floatHero 3s infinite ease-in-out;
     }
+    
     .progress-bg {
-        background: #2c3e50;
+        background: #1a252f;
         border-radius: 20px;
-        height: 30px;
+        height: 35px; /* 바 두께 키움 */
         width: 100%;
-        margin: 15px 0;
-        border: 2px solid #7f8c8d;
+        margin: 20px 0;
+        border: 2px solid #95a5a6;
         overflow: hidden;
+        position: relative;
     }
     .progress-bar {
-        background: linear-gradient(90deg, #2ecc71, #27ae60);
+        background: linear-gradient(90deg, #3498db, #2980b9);
         height: 100%;
         width: {{ (xp / req_xp * 100)|int }}%;
         transition: width 1s ease-in-out;
+        box-shadow: 0 0 10px #3498db;
     }
     
-    /* 포인트 표시 박스 */
+    /* 포인트 박스 가독성 개선 */
     .point-box {
-        background: #f1c40f;
-        color: #2c3e50;
-        padding: 15px;
+        background: #f39c12;
+        color: #fff;
+        text-shadow: 1px 1px 0 rgba(0,0,0,0.3);
+        padding: 20px 40px;
         border-radius: 15px;
         display: inline-block;
-        margin-top: 20px;
-        font-size: 1.5rem;
-        border-bottom: 5px solid #d35400;
+        margin-top: 30px;
+        font-size: 1.8rem;
+        border-bottom: 6px solid #d35400;
         font-weight: bold;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        transition: transform 0.2s;
     }
+    .point-box:hover { transform: scale(1.05); }
 
-    @keyframes bounce { 
+    @keyframes floatHero { 
         0%, 100% { transform: translateY(0); } 
-        50% { transform: translateY(-10px); } 
+        50% { transform: translateY(-15px); } 
     }
 </style>
 
 <div class="profile-card">
-    <div class="level-badge">
-        {% if level < 10 %}🐣
-        {% elif level < 30 %}⚔️
-        {% elif level < 50 %}🏰
-        {% else %}👑{% endif %}
+    <div class="hero-badge">
+        {% if level < 10 %}🕶️{% elif level < 30 %}🦸‍♂️{% elif level < 50 %}🚀{% else %}🌌{% endif %}
     </div>
     
+    <h2 style="color:#ecf0f1; margin-bottom:5px;">
+        {% if level < 10 %}평범한 시민
+        {% elif level < 30 %}초보 히어로
+        {% elif level < 50 %}캡틴 블랭크
+        {% else %}전설의 빈칸맨{% endif %}
+    </h2>
+
     <h1>{{ user_id }} <span style="font-size:0.6em; color:#bdc3c7;">(Lv.{{ level }})</span></h1>
     
     <div class="progress-bg">
         <div class="progress-bar"></div>
-    </div>
-    <div style="display:flex; justify-content:space-between; color:#bdc3c7;">
-        <span>EXP</span>
-        <span>{{ xp }} / {{ req_xp }}</span>
+        <div style="position:absolute; width:100%; top:50%; transform:translateY(-50%); color:white; font-size:1rem; font-weight:bold; text-shadow:1px 1px 2px black;">
+            {{ xp }} / {{ req_xp }} XP
+        </div>
     </div>
 
     <div class="point-box">
-        💰 보유 포인트: <span style="font-size: 1.8rem;">{{ points }} P</span>
+        💰 보유 포인트: {{ points }} P
     </div>
 
-    <hr style="border-color: #7f8c8d; margin-top: 40px; opacity: 0.5;">
+    <hr style="border-color: #34495e; margin-top: 50px;">
     
-    <p style="color: #95a5a6; margin-top: 20px; font-size: 1.1rem;">
-        "빈칸을 채워 카드를 모으고, 포인트로 교환하세요!"
+    <p style="color: #95a5a6; margin-top: 30px; font-size: 1.3rem;">
+        "작전지역(스테이지)에서 빈칸을 채워 악당들을 물리치고 포인트를 획득하라!"
     </p>
 </div>
 {% endblock %}
