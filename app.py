@@ -12,7 +12,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'lord_of_blanks_key')
 
-# [중요] Render 배포 시 HTTPS 인식을 위해 필수 설정
+# Render 배포 시 HTTPS 인식 설정
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # --- 구글 OAuth 설정 ---
@@ -33,7 +33,6 @@ class GoogleSheetManager:
         self.users_ws = None
         self.quests_ws = None
         self.collections_ws = None
-        # 사용할 유저 시트 헤더 정의 (순서 중요)
         self.USER_HEADERS = ["user_id", "password", "level", "xp", "title", "last_idx", "points"]
         self.connect_db() 
 
@@ -50,20 +49,15 @@ class GoogleSheetManager:
             self.client = gspread.authorize(creds)
             self.sheet = self.client.open("memory_game_db")
 
-            # [Users 시트]
             try: self.users_ws = self.sheet.worksheet("users")
             except: self.users_ws = self.sheet.add_worksheet("users", 100, 10)
             
-            # 헤더가 없으면 강제 주입
             if not self.users_ws.get_all_values():
-                print("⚠️ users 시트 헤더 복구")
                 self.users_ws.append_row(self.USER_HEADERS)
 
-            # [Collections 시트]
             try: self.collections_ws = self.sheet.worksheet("collections")
             except: self.collections_ws = self.sheet.add_worksheet("collections", 100, 10)
 
-            # [Quests 시트]
             try: self.quests_ws = self.sheet.worksheet("quests")
             except: self.quests_ws = self.sheet.add_worksheet("quests", 100, 5)
 
@@ -77,19 +71,14 @@ class GoogleSheetManager:
         if self.users_ws is None: return self.connect_db()
         return True
 
-    # [핵심 수정] 빈칸 헤더 에러를 방지하는 안전한 읽기 함수
     def get_safe_records(self, worksheet, headers_list):
         try:
-            # get_all_records() 대신 값만 전부 가져옴
             rows = worksheet.get_all_values()
-            if len(rows) < 2: return [] # 데이터 없음
+            if len(rows) < 2: return [] 
             
-            # 첫 줄(헤더)은 무시하고, 우리가 정한 헤더(headers_list)로 매핑
             records = []
-            for row in rows[1:]: # 2번째 줄부터 데이터
-                # 행의 길이가 헤더보다 짧으면 빈칸 채움
+            for row in rows[1:]: 
                 padded_row = row + [""] * (len(headers_list) - len(row))
-                # 헤더와 데이터 매핑 (앞에서부터 순서대로)
                 record = dict(zip(headers_list, padded_row))
                 records.append(record)
             return records
@@ -97,77 +86,35 @@ class GoogleSheetManager:
             print(f"데이터 읽기 오류: {e}")
             return []
 
-    # --- 유저 관련 메서드 (get_safe_records 사용) ---
+    # --- 유저 관련 ---
     def get_user_by_id(self, user_id):
         if not self.check_connection(): return None, None
         try:
-            # 수정된 읽기 함수 사용
             records = self.get_safe_records(self.users_ws, self.USER_HEADERS)
             for i, row in enumerate(records):
                 if str(row['user_id']) == str(user_id):
-                    # 숫자 변환 안전 처리
-                    try: points = int(row.get('points', 0) or 0)
-                    except: points = 0
-                    
-                    try: level = int(row.get('level', 1) or 1)
-                    except: level = 1
-                    
-                    try: xp = int(row.get('xp', 0) or 0)
-                    except: xp = 0
-
-                    row['points'] = points
-                    row['level'] = level
-                    row['xp'] = xp
-                    return row, i + 2 # 실제 시트 행 번호 (헤더 포함)
-        except Exception as e:
-            print(f"❌ 유저 조회 실패: {e}")
+                    try: row['points'] = int(row.get('points', 0) or 0)
+                    except: row['points'] = 0
+                    try: row['level'] = int(row.get('level', 1) or 1)
+                    except: row['level'] = 1
+                    try: row['xp'] = int(row.get('xp', 0) or 0)
+                    except: row['xp'] = 0
+                    return row, i + 2 
+        except: pass
         return None, None
 
     def register_social(self, user_id):
         if not self.check_connection(): return False, "DB 연결 끊김"
         try:
-            # 중복 체크
             user_data, _ = self.get_user_by_id(user_id)
             if user_data: return True, "이미 존재함"
             
-            # 신규 가입
             self.users_ws.append_row([user_id, "SOCIAL_LOGIN", 1, 0, "빈칸 견습생", 0, 0])
             return True, "가입 성공"
         except Exception as e:
-            print(f"❌ 소셜 가입 저장 실패: {e}")
             return False, str(e)
 
-    def login(self, user_id, password):
-        if not self.check_connection(): return None, None
-        try:
-            records = self.get_safe_records(self.users_ws, self.USER_HEADERS)
-            for i, row in enumerate(records):
-                if str(row['user_id']) == str(user_id) and str(row['password']) == str(password):
-                    # 숫자 변환 안전 처리
-                    try: row['points'] = int(row.get('points', 0) or 0)
-                    except: row['points'] = 0
-                    
-                    try: row['level'] = int(row.get('level', 1) or 1)
-                    except: row['level'] = 1
-                    
-                    try: row['xp'] = int(row.get('xp', 0) or 0)
-                    except: row['xp'] = 0
-                    
-                    return row, i + 2
-        except: pass
-        return None, None
-    
-    def register(self, user_id, password):
-        if not self.check_connection(): return False
-        try:
-            records = self.get_safe_records(self.users_ws, self.USER_HEADERS)
-            for row in records:
-                if str(row['user_id']) == str(user_id): return False
-            self.users_ws.append_row([user_id, password, 1, 0, "빈칸 견습생", 0, 0])
-            return True
-        except: return False
-
-    # --- 기타 메서드 (퀘스트/보상) ---
+    # --- 퀘스트 및 보상 ---
     def get_quest_list(self):
         if not self.check_connection(): return []
         try: return self.quests_ws.get_all_records()
@@ -304,22 +251,19 @@ def google_callback():
         user_info = token.get('userinfo')
         user_email = user_info['email']
         
-        # 1. DB 연결 확인
         if not gm.check_connection():
-            flash("🚨 서버 오류: 데이터베이스 연결 실패")
+            flash("🚨 서버 오류: DB 연결 실패")
             return redirect(url_for('index'))
 
-        # 2. 유저 확인 및 가입
         user_data, row_idx = gm.get_user_by_id(user_email)
         
         if not user_data:
             success, msg = gm.register_social(user_email)
             if not success:
-                flash(f"🚫 회원가입 저장 실패: {msg}") 
+                flash(f"🚫 가입 실패: {msg}") 
                 return redirect(url_for('index'))
             user_data, row_idx = gm.get_user_by_id(user_email)
             
-        # 3. 로그인 세션 처리
         if user_data:
             session['user_id'] = user_email
             session['user_row_idx'] = row_idx
@@ -329,44 +273,11 @@ def google_callback():
             flash(f"환영합니다, {user_info.get('name', '히어로')}님!")
             return redirect(url_for('lobby'))
         else:
-            flash("🚨 가입 처리 후 정보 로드 실패.")
+            flash("🚨 정보 로드 실패.")
             
     except Exception as e:
-        print(f"로그인 에러: {e}")
-        flash(f"구글 로그인 실패: {e}")
+        flash(f"구글 로그인 오류: {e}")
         
-    return redirect(url_for('index'))
-
-@app.route('/login', methods=['POST'])
-def login():
-    uid = request.form.get('id')
-    upw = request.form.get('pw')
-    if not gm.check_connection():
-        flash("🚫 DB 연결 실패. 서버 설정을 확인하세요.")
-        return redirect(url_for('index'))
-
-    user_data, row_idx = gm.login(uid, upw)
-    if user_data:
-        session['user_id'] = uid
-        session['user_row_idx'] = row_idx
-        session['level'] = user_data.get('level', 1)
-        session['xp'] = user_data.get('xp', 0)
-        session['points'] = user_data.get('points', 0)
-        return redirect(url_for('lobby'))
-    
-    flash("로그인 실패! 아이디/비번 확인.")
-    return redirect(url_for('index'))
-
-@app.route('/register', methods=['POST'])
-def register():
-    uid = request.form.get('new_id')
-    upw = request.form.get('new_pw')
-    if not gm.check_connection():
-        flash("DB 연결 실패.")
-        return redirect(url_for('index'))
-
-    if gm.register(uid, upw): flash("가입 성공! 로그인해주세요.")
-    else: flash("가입 실패 (중복 ID)")
     return redirect(url_for('index'))
 
 @app.route('/logout')
@@ -457,6 +368,5 @@ def exchange():
     return jsonify({'success': False, 'msg': '교환 실패'})
 
 if __name__ == '__main__':
-    # 로컬 테스트 시 HTTPS 없이 구글 로그인 허용
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
     app.run(host='0.0.0.0', port=10000)
