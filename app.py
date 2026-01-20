@@ -7,12 +7,12 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from authlib.integrations.flask_client import OAuth
-from werkzeug.middleware.proxy_fix import ProxyFix # [필수] 배포 환경 호환성
+from werkzeug.middleware.proxy_fix import ProxyFix # [핵심] 배포 환경 호환성
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'lord_of_blanks_key')
 
-# [중요] Render 배포 시 HTTPS 인식을 위해 필수 설정
+# [중요] Render 서버의 HTTPS를 인식하도록 설정 (이게 없으면 무한 로딩/로그인 실패)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # --- 구글 OAuth 설정 ---
@@ -33,11 +33,10 @@ class GoogleSheetManager:
         self.users_ws = None
         self.quests_ws = None
         self.collections_ws = None
-        self.connect_db() # 시작할 때 연결 시도
+        self.connect_db() 
 
     def connect_db(self):
         try:
-            # 환경변수 확인
             json_creds = os.environ.get('GCP_CREDENTIALS')
             if not json_creds:
                 print("🚫 오류: Render 환경변수에 GCP_CREDENTIALS가 없습니다!")
@@ -68,12 +67,9 @@ class GoogleSheetManager:
             return False
 
     def check_connection(self):
-        # 연결이 안 되어 있으면 재시도
-        if self.users_ws is None:
-            return self.connect_db()
+        if self.users_ws is None: return self.connect_db()
         return True
 
-    # --- 메서드들 (연결 체크 추가됨) ---
     def get_user_by_id(self, user_id):
         if not self.check_connection(): return None, None
         try:
@@ -254,9 +250,9 @@ def google_callback():
         user_info = token.get('userinfo')
         user_email = user_info['email']
         
-        # 1. DB 연결 확인 (여기가 문제일 확률 높음)
+        # 1. DB 연결 확인
         if not gm.check_connection():
-            flash("🚨 서버 오류: 데이터베이스(구글 시트)에 연결할 수 없습니다. 환경변수(GCP_CREDENTIALS)를 확인해주세요.")
+            flash("🚨 서버 오류: 데이터베이스(구글 시트) 연결 실패. 관리자에게 문의하세요.")
             return redirect(url_for('index'))
 
         # 2. 유저 확인 및 가입
