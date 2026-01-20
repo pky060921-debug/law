@@ -1,50 +1,190 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>던전 입구</title>
-    <style>
-        body { font-family: 'Pretendard', sans-serif; background-color: #1a1a1a; color: #fff; padding: 20px; text-align: center; }
-        .container { max-width: 600px; margin: 0 auto; background: #2a2a2a; padding: 20px; border-radius: 15px; }
-        select, input { width: 90%; padding: 12px; margin: 10px 0; background: #333; border: 1px solid #555; color: #fff; border-radius: 5px; }
-        button { width: 100%; padding: 12px; margin-top: 10px; background: #ffd700; color: #000; border: none; font-weight: bold; border-radius: 5px; cursor: pointer; }
-        h3 { border-bottom: 2px solid #444; padding-bottom: 10px; margin-top: 30px; }
-    </style>
-</head>
-<body>
-    <h1>🏰 던전 입구</h1>
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            {% for message in messages %}
-                <div style="color: #ff6b6b; font-weight: bold; margin-bottom: 15px;">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
+{% extends "layout.html" %}
 
-    <div class="container">
-        <h3>⚔️ 퀘스트 목록</h3>
-        <form method="POST">
-            <select name="quest_select">
-                <option selected>선택 안함</option>
-                {% for q in quests %}
-                    <option value="{{ q.quest_name }}">{{ q.quest_name }}</option>
-                {% endfor %}
-            </select>
-            <button type="submit">입장하기</button>
-        </form>
+{% block content %}
+<style>
+    /* [파일 업로드 섹션 스타일] */
+    .upload-box {
+        border: 2px dashed #5e4b3c;
+        background: rgba(0,0,0,0.2);
+        padding: 20px;
+        border-radius: 10px;
+        margin-top: 50px;
+        text-align: center;
+    }
+    .upload-input {
+        background: #222;
+        border: 1px solid #444;
+        color: #ccc;
+        padding: 10px;
+        border-radius: 5px;
+        margin: 5px;
+    }
+    .btn-upload {
+        background: #2c1e12;
+        color: #d4af37;
+        border: 1px solid #d4af37;
+        padding: 10px 20px;
+        cursor: pointer;
+        font-family: 'Cinzel Decorative';
+    }
+    .btn-upload:hover { background: #d4af37; color: #000; }
 
-        <h3>📂 새 퀘스트 등록 (파일 업로드)</h3>
-        <p style="font-size: 0.8rem; color: #aaa;">
-            텍스트 파일을 올리면 엔터(줄바꿈) 단위로<br>
-            자동으로 퀘스트가 나누어 생성됩니다.<br>
-            (예: 민법 텍스트파일 -> 민법-1, 민법-2...)
-        </p>
-        <form method="POST" enctype="multipart/form-data">
-            <input type="text" name="new_q_name" placeholder="퀘스트 제목 (예: 민법, 형법)" required>
-            <input type="file" name="new_q_file" accept=".txt" required>
-            <button type="submit" style="background: #4a90e2; color: white;">일괄 등록하기</button>
-        </form>
+    /* [퀘스트 그룹 버튼 스타일] */
+    .quest-group-btn {
+        width: 100%;
+        text-align: left;
+        background: linear-gradient(to right, #1a0f2e, #2c1e12);
+        color: #d4af37;
+        padding: 20px;
+        margin-top: 15px;
+        border: 1px solid #5e4b3c;
+        border-radius: 8px;
+        font-family: 'Cinzel Decorative';
+        font-size: 1.2rem;
+        cursor: pointer;
+        transition: 0.3s;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .quest-group-btn:hover {
+        box-shadow: 0 0 15px rgba(212, 175, 55, 0.3);
+        border-color: #d4af37;
+    }
+
+    /* [세부 챕터 목록 (숨김 상태)] */
+    .chapter-list {
+        display: none; /* 기본 숨김 */
+        background: rgba(0,0,0,0.5);
+        border: 1px solid #444;
+        border-top: none;
+        padding: 10px;
+        margin-bottom: 20px;
+        border-radius: 0 0 8px 8px;
+    }
+
+    /* [세부 챕터 버튼] */
+    .chapter-item {
+        display: block;
+        width: 100%;
+        text-align: left;
+        background: transparent;
+        color: #aaa;
+        border: none;
+        padding: 12px;
+        border-bottom: 1px solid #333;
+        cursor: pointer;
+        transition: 0.2s;
+        font-family: 'Spectral';
+        font-size: 1rem;
+    }
+    .chapter-item:hover {
+        color: #fff;
+        background: rgba(212, 175, 55, 0.1);
+        padding-left: 20px; /* 살짝 오른쪽으로 이동 효과 */
+    }
+</style>
+
+<h1>⚔️ 지식의 서고 (던전)</h1>
+<p style="text-align:center; color:#888;">훈련할 법령을 선택하십시오.</p>
+
+<div id="quest-container">
     </div>
-</body>
-</html>
+
+<div class="upload-box">
+    <h3 style="margin-top:0;">📜 신규 법령 등록</h3>
+    <p style="font-size: 0.9rem; color: #888;">
+        텍스트 파일을 업로드하면 엔터 단위로 챕터가 자동 생성됩니다.<br>
+        제목 예: '민법' 입력 시 -> 민법-1, 민법-2... 로 생성
+    </p>
+    <form method="POST" enctype="multipart/form-data">
+        <input type="text" class="upload-input" name="new_q_name" placeholder="법령 제목 (예: 민법)" required>
+        <input type="file" class="upload-input" name="new_q_file" accept=".txt" required>
+        <button type="submit" class="btn-upload">등록하기</button>
+    </form>
+</div>
+
+<script>
+    // Flask에서 넘겨준 퀘스트 데이터를 JS로 가져옴
+    const allQuests = {{ quests | tojson }};
+    const container = document.getElementById('quest-container');
+    
+    // 1. 데이터를 제목별로 그룹화 (예: '민법-1', '민법-2' -> '민법' 그룹)
+    const groups = {};
+    
+    allQuests.forEach(q => {
+        // 이름이 "제목-번호" 형식이 아니더라도 처리 가능하도록 로직 구성
+        let parts = q.quest_name.split('-');
+        let title = parts[0]; // "민법"
+        let subTitle = q.quest_name; // 기본값
+        
+        // "-"가 있다면 뒷부분을 세부 제목으로 사용
+        if (parts.length > 1) {
+            subTitle = q.quest_name.substring(title.length + 1); // "1", "제1조" 등
+        }
+
+        if (!groups[title]) {
+            groups[title] = [];
+        }
+        groups[title].push({
+            fullName: q.quest_name, // 서버에 보낼 실제 이름
+            displayName: subTitle   // 화면에 보여줄 이름
+        });
+    });
+
+    // 2. HTML 생성
+    if (Object.keys(groups).length === 0) {
+        container.innerHTML = "<div style='text-align:center; padding:30px; color:#666;'>등록된 퀘스트가 없습니다.</div>";
+    }
+
+    for (const [title, chapters] of Object.entries(groups)) {
+        // (1) 그룹 버튼 생성 (예: 민법)
+        const groupBtn = document.createElement('div');
+        groupBtn.className = 'quest-group-btn';
+        groupBtn.innerHTML = `<span>📂 ${title}</span> <span style="font-size:0.8em; color:#888;">${chapters.length}개 조항</span>`;
+        
+        // (2) 세부 목록 컨테이너 생성
+        const listDiv = document.createElement('div');
+        listDiv.className = 'chapter-list';
+
+        // (3) 각 챕터 버튼 생성
+        chapters.forEach(chap => {
+            // 버튼을 감싸는 폼 생성 (POST 전송을 위해)
+            const form = document.createElement('form');
+            form.method = 'POST';
+            
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'quest_select';
+            input.value = chap.fullName;
+            
+            const btn = document.createElement('button');
+            btn.className = 'chapter-item';
+            btn.type = 'submit';
+            
+            // 챕터 이름 꾸미기 (숫자만 있으면 '제N조' 붙이기, 아니면 그대로)
+            let viewName = chap.displayName;
+            if (!isNaN(viewName)) {
+                viewName = `제 ${viewName} 조`;
+            }
+            btn.innerText = `📄 ${viewName}`;
+
+            form.appendChild(input);
+            form.appendChild(btn);
+            listDiv.appendChild(form);
+        });
+
+        // (4) 클릭 이벤트 (열고 닫기)
+        groupBtn.onclick = () => {
+            const isVisible = listDiv.style.display === 'block';
+            // 기존에 열린 다른 메뉴 닫기 (선택사항 - 원치 않으면 이 줄 삭제)
+            document.querySelectorAll('.chapter-list').forEach(el => el.style.display = 'none');
+            
+            listDiv.style.display = isVisible ? 'none' : 'block';
+        };
+
+        container.appendChild(groupBtn);
+        container.appendChild(listDiv);
+    }
+</script>
+{% endblock %}
