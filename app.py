@@ -33,6 +33,8 @@ class GoogleSheetManager:
         self.users_ws = None
         self.quests_ws = None
         self.collections_ws = None
+        # 사용할 유저 시트 헤더 정의 (순서 중요)
+        self.USER_HEADERS = ["user_id", "password", "level", "xp", "title", "last_idx", "points"]
         self.connect_db() 
 
     def connect_db(self):
@@ -48,18 +50,20 @@ class GoogleSheetManager:
             self.client = gspread.authorize(creds)
             self.sheet = self.client.open("memory_game_db")
 
-            # [수정] users 시트 연결 및 헤더 자동 복구 기능 추가
+            # [Users 시트]
             try: self.users_ws = self.sheet.worksheet("users")
             except: self.users_ws = self.sheet.add_worksheet("users", 100, 10)
             
-            # 시트가 비어있으면 헤더 추가 (매우 중요!)
+            # 헤더가 없으면 강제 주입
             if not self.users_ws.get_all_values():
-                print("⚠️ users 시트가 비어있어 헤더를 추가합니다.")
-                self.users_ws.append_row(["user_id", "password", "level", "xp", "title", "last_idx", "points"])
+                print("⚠️ users 시트 헤더 복구")
+                self.users_ws.append_row(self.USER_HEADERS)
 
+            # [Collections 시트]
             try: self.collections_ws = self.sheet.worksheet("collections")
             except: self.collections_ws = self.sheet.add_worksheet("collections", 100, 10)
 
+            # [Quests 시트]
             try: self.quests_ws = self.sheet.worksheet("quests")
             except: self.quests_ws = self.sheet.add_worksheet("quests", 100, 5)
 
@@ -73,15 +77,48 @@ class GoogleSheetManager:
         if self.users_ws is None: return self.connect_db()
         return True
 
+    # [핵심 수정] 빈칸 헤더 에러를 방지하는 안전한 읽기 함수
+    def get_safe_records(self, worksheet, headers_list):
+        try:
+            # get_all_records() 대신 값만 전부 가져옴
+            rows = worksheet.get_all_values()
+            if len(rows) < 2: return [] # 데이터 없음
+            
+            # 첫 줄(헤더)은 무시하고, 우리가 정한 헤더(headers_list)로 매핑
+            records = []
+            for row in rows[1:]: # 2번째 줄부터 데이터
+                # 행의 길이가 헤더보다 짧으면 빈칸 채움
+                padded_row = row + [""] * (len(headers_list) - len(row))
+                # 헤더와 데이터 매핑 (앞에서부터 순서대로)
+                record = dict(zip(headers_list, padded_row))
+                records.append(record)
+            return records
+        except Exception as e:
+            print(f"데이터 읽기 오류: {e}")
+            return []
+
+    # --- 유저 관련 메서드 (get_safe_records 사용) ---
     def get_user_by_id(self, user_id):
         if not self.check_connection(): return None, None
         try:
-            records = self.users_ws.get_all_records()
+            # 수정된 읽기 함수 사용
+            records = self.get_safe_records(self.users_ws, self.USER_HEADERS)
             for i, row in enumerate(records):
                 if str(row['user_id']) == str(user_id):
-                    row['points'] = row.get('points', 0)
-                    if row['points'] == '': row['points'] = 0
-                    return row, i + 2
+                    # 숫자 변환 안전 처리
+                    try: points = int(row.get('points', 0) or 0)
+                    except: points = 0
+                    
+                    try: level = int(row.get('level', 1) or 1)
+                    except: level = 1
+                    
+                    try: xp = int(row.get('xp', 0) or 0)
+                    except: xp = 0
+
+                    row['points'] = points
+                    row['level'] = level
+                    row['xp'] = xp
+                    return row, i + 2 # 실제 시트 행 번호 (헤더 포함)
         except Exception as e:
             print(f"❌ 유저 조회 실패: {e}")
         return None, None
@@ -89,9 +126,9 @@ class GoogleSheetManager:
     def register_social(self, user_id):
         if not self.check_connection(): return False, "DB 연결 끊김"
         try:
-            records = self.users_ws.get_all_records()
-            for row in records:
-                if str(row['user_id']) == str(user_id): return True, "이미 존재함"
+            # 중복 체크
+            user_data, _ = self.get_user_by_id(user_id)
+            if user_data: return True, "이미 존재함"
             
             # 신규 가입
             self.users_ws.append_row([user_id, "SOCIAL_LOGIN", 1, 0, "빈칸 견습생", 0, 0])
@@ -103,11 +140,19 @@ class GoogleSheetManager:
     def login(self, user_id, password):
         if not self.check_connection(): return None, None
         try:
-            records = self.users_ws.get_all_records()
+            records = self.get_safe_records(self.users_ws, self.USER_HEADERS)
             for i, row in enumerate(records):
                 if str(row['user_id']) == str(user_id) and str(row['password']) == str(password):
-                    row['points'] = row.get('points', 0)
-                    if row['points'] == '': row['points'] = 0
+                    # 숫자 변환 안전 처리
+                    try: row['points'] = int(row.get('points', 0) or 0)
+                    except: row['points'] = 0
+                    
+                    try: row['level'] = int(row.get('level', 1) or 1)
+                    except: row['level'] = 1
+                    
+                    try: row['xp'] = int(row.get('xp', 0) or 0)
+                    except: row['xp'] = 0
+                    
                     return row, i + 2
         except: pass
         return None, None
@@ -115,13 +160,14 @@ class GoogleSheetManager:
     def register(self, user_id, password):
         if not self.check_connection(): return False
         try:
-            records = self.users_ws.get_all_records()
+            records = self.get_safe_records(self.users_ws, self.USER_HEADERS)
             for row in records:
                 if str(row['user_id']) == str(user_id): return False
             self.users_ws.append_row([user_id, password, 1, 0, "빈칸 견습생", 0, 0])
             return True
         except: return False
 
+    # --- 기타 메서드 (퀘스트/보상) ---
     def get_quest_list(self):
         if not self.check_connection(): return []
         try: return self.quests_ws.get_all_records()
@@ -260,37 +306,34 @@ def google_callback():
         
         # 1. DB 연결 확인
         if not gm.check_connection():
-            flash("🚨 서버 오류: 데이터베이스 연결 실패. 관리자에게 문의하세요.")
+            flash("🚨 서버 오류: 데이터베이스 연결 실패")
             return redirect(url_for('index'))
 
         # 2. 유저 확인 및 가입
         user_data, row_idx = gm.get_user_by_id(user_email)
         
         if not user_data:
-            # 회원가입 시도 및 결과 확인
             success, msg = gm.register_social(user_email)
             if not success:
-                flash(f"🚫 회원가입 저장 실패: {msg}") # 실패 원인을 화면에 표시
+                flash(f"🚫 회원가입 저장 실패: {msg}") 
                 return redirect(url_for('index'))
-            
-            # 가입 후 다시 정보 로드
             user_data, row_idx = gm.get_user_by_id(user_email)
             
         # 3. 로그인 세션 처리
         if user_data:
             session['user_id'] = user_email
             session['user_row_idx'] = row_idx
-            session['level'] = user_data['level']
-            session['xp'] = user_data['xp']
+            session['level'] = user_data.get('level', 1)
+            session['xp'] = user_data.get('xp', 0)
             session['points'] = user_data.get('points', 0)
             flash(f"환영합니다, {user_info.get('name', '히어로')}님!")
             return redirect(url_for('lobby'))
         else:
-            flash("🚨 치명적 오류: 가입은 되었으나 정보를 불러오지 못했습니다. (시트 헤더를 확인하세요)")
+            flash("🚨 가입 처리 후 정보 로드 실패.")
             
     except Exception as e:
         print(f"로그인 에러: {e}")
-        flash(f"구글 로그인 처리 중 오류: {e}")
+        flash(f"구글 로그인 실패: {e}")
         
     return redirect(url_for('index'))
 
@@ -306,8 +349,8 @@ def login():
     if user_data:
         session['user_id'] = uid
         session['user_row_idx'] = row_idx
-        session['level'] = user_data['level']
-        session['xp'] = user_data['xp']
+        session['level'] = user_data.get('level', 1)
+        session['xp'] = user_data.get('xp', 0)
         session['points'] = user_data.get('points', 0)
         return redirect(url_for('lobby'))
     
@@ -319,7 +362,7 @@ def register():
     uid = request.form.get('new_id')
     upw = request.form.get('new_pw')
     if not gm.check_connection():
-        flash("DB 연결 실패. 가입할 수 없습니다.")
+        flash("DB 연결 실패.")
         return redirect(url_for('index'))
 
     if gm.register(uid, upw): flash("가입 성공! 로그인해주세요.")
