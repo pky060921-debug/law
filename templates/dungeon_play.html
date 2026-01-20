@@ -11,23 +11,33 @@
         /* 상단 UI */
         header { display: flex; justify-content: space-between; border-bottom: 2px solid #444; padding-bottom: 15px; margin-bottom: 20px; }
         .xp-bar { font-size: 1.2rem; color: #4a90e2; font-weight: bold; }
-        .xp-minus { color: #ff6b6b; animation: floatUp 0.5s ease-out; }
+        
+        /* XP 애니메이션 효과 */
+        .xp-anim { position: absolute; font-weight: bold; animation: floatUp 0.8s ease-out forwards; pointer-events: none; }
+        .xp-plus { color: #2ecc71; }
+        .xp-minus { color: #ff6b6b; }
+
+        @keyframes floatUp {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-30px); opacity: 0; }
+        }
 
         /* 버튼 스타일 */
         .btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; color: #fff; transition: 0.2s; }
         .btn-submit { background: #4a90e2; width: 100%; margin-top: 20px; font-size: 1.1rem; padding: 15px; }
         .btn-submit:hover { background: #357abd; }
+        .btn-submit:disabled { background: #555; cursor: not-allowed; }
         .btn-back { background: #555; }
 
         /* 게임 보드 (텍스트 영역) */
         #game-board { line-height: 2.8; font-size: 1.15rem; text-align: left; word-break: keep-all; }
         
         /* 단어 그룹 (입력창 + 조사) */
-        .word-group { display: inline-block; white-space: nowrap; margin-right: 5px; }
+        .word-group { display: inline-block; white-space: nowrap; margin-right: 5px; position: relative; }
         .particle { color: #aaa; font-weight: normal; }
         .prefix { color: #aaa; margin-right: 2px; }
 
-        /* 입력창 스타일 (엄격 모드) */
+        /* 입력창 스타일 */
         input.quiz-input {
             background: #333; border: none; border-bottom: 2px solid #555;
             color: #fff; text-align: center; font-size: 1.1rem; padding: 2px 5px;
@@ -35,10 +45,24 @@
             transition: all 0.2s;
         }
         input.quiz-input:focus { border-bottom-color: #4a90e2; background: #3a3a3a; }
+        input.quiz-input:read-only { cursor: default; }
         
         /* 정답/오답 상태 */
-        input.correct { border-bottom-color: #2ecc71; background: #1e3a29; color: #2ecc71; font-weight: bold; pointer-events: none; }
+        input.correct { border-bottom-color: #2ecc71; background: #1e3a29; color: #2ecc71; font-weight: bold; }
         input.error { border-bottom-color: #ff6b6b; background: #3a1e1e; color: #ff6b6b; animation: shake 0.3s; }
+
+        /* 정답 힌트 (오답일 때 표시) */
+        .answer-hint {
+            display: none; position: absolute; top: -35px; left: 50%; transform: translateX(-50%);
+            background: #e74c3c; color: white; padding: 4px 8px; border-radius: 4px;
+            font-size: 0.9rem; font-weight: bold; z-index: 100; white-space: nowrap; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+        .answer-hint::after {
+            content: ''; position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%);
+            border-width: 6px 6px 0; border-style: solid; border-color: #e74c3c transparent transparent transparent;
+        }
+        /* 에러 상태일 때 힌트 보이기 */
+        .word-group.show-hint .answer-hint { display: block; }
 
         /* 편집 모드 스타일 */
         .edit-word { cursor: pointer; padding: 2px 4px; border-radius: 4px; border: 1px solid transparent; }
@@ -51,10 +75,6 @@
             0%, 100% { transform: translateX(0); }
             25% { transform: translateX(-5px); }
             75% { transform: translateX(5px); }
-        }
-        @keyframes floatUp {
-            0% { transform: translateY(0); opacity: 1; }
-            100% { transform: translateY(-20px); opacity: 0; }
         }
     </style>
 </head>
@@ -85,7 +105,6 @@
 
             // 1. 텍스트 분리 로직 (조사/부호 떼어내기)
             function parseText(text) {
-                // 줄바꿈 보존을 위해 문단으로 나눔
                 const paragraphs = text.split('\n');
                 let html = '';
                 let globalIdx = 0;
@@ -96,13 +115,11 @@
                     const words = para.split(/\s+/);
                     
                     words.forEach(word => {
-                        // 정규식: (접두어)(핵심단어)(접미어/부호)
                         const match = word.match(/^([(\[\"\'\.]*)(.+?)([)\]\"\'\,\.\?]*)$/);
                         let prefix = match ? match[1] : "";
                         let core = match ? match[2] : word;
                         let suffix = match ? match[3] : "";
 
-                        // 조사 분리 (긴 것부터)
                         const particles = ['으로', '에서', '부터', '까지', '은', '는', '이', '가', '을', '를', '에', '의', '와', '과', '로', '도', '만'];
                         for (let p of particles) {
                             if (core.endsWith(p) && core.length > p.length) {
@@ -112,10 +129,8 @@
                             }
                         }
 
-                        // 데이터 저장 (나중에 복원용)
                         tokenData.push({ prefix, core, suffix, selected: false });
                         
-                        // HTML 생성
                         html += `<span class="word-group">`;
                         if(prefix) html += `<span class="prefix">${prefix}</span>`;
                         html += `<span class="edit-word" onclick="toggleWord(${globalIdx}, this)">${core}</span>`;
@@ -134,15 +149,7 @@
             }
 
             function submitEdit() {
-                // 선택된 단어에 {} 씌워서 텍스트 재조립
-                let finalStr = "";
-                let pIdx = 0; // 줄바꿈 처리를 위해 원본 참조가 필요하지만, 여기선 공백으로 단순 연결
-                
-                // 줄바꿈 구조를 유지하기 어려우므로, tokenData 순서대로 재조립하되 줄바꿈은 소실될 수 있음.
-                // 하지만 app.py 로직상 한 퀘스트는 한 문단(조항)이므로 공백 연결도 무방함.
-                // 더 정확히 하려면 rawContent의 줄바꿈을 추적해야 함. 여기선 단순화.
-                
-                finalStr = tokenData.map(t => {
+                let finalStr = tokenData.map(t => {
                     let w = t.core;
                     if(t.selected) w = `{${w}}`;
                     return `${t.prefix}${w}${t.suffix}`;
@@ -152,7 +159,6 @@
                 document.getElementById('edit-form').submit();
             }
 
-            // 초기 실행
             parseText(rawContent);
         </script>
 
@@ -163,10 +169,13 @@
                     {% if part.type == 'text' %}
                         <span>{{ part.val }}</span>
                     {% else %}
-                        <input type="text" class="quiz-input" 
-                               data-answer="{{ targets[part.id] }}"
-                               style="width: {{ targets[part.id]|length * 16 + 10 }}px;"
-                               autocomplete="off">
+                        <span class="word-group">
+                            <span class="answer-hint">{{ targets[part.id] }}</span>
+                            <input type="text" class="quiz-input" 
+                                   data-answer="{{ targets[part.id] }}"
+                                   style="width: {{ targets[part.id]|length * 16 + 10 }}px;"
+                                   autocomplete="off">
+                        </span>
                     {% endif %}
                 {% endfor %}
             </div>
@@ -185,88 +194,116 @@
             const inputs = document.querySelectorAll('.quiz-input');
             const xpDisplay = document.getElementById('xp-val');
             const submitBtn = document.getElementById('submit-btn');
+            
             let currentXP = {{ session['xp'] }};
             let penaltyCount = 0;
 
             inputs.forEach(input => {
-                input.addEventListener('input', function() {
+                // [변경] input 이벤트 대신 change(엔터, 포커스아웃) 이벤트 사용
+                // 입력 중에는 채점하지 않음
+                input.addEventListener('change', function() {
                     validateInput(this);
                     checkAllFilled();
+                });
+
+                // 엔터키 누르면 포커스 해제하여 change 이벤트 발생 유도 & 다음 칸 이동
+                input.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        this.blur(); // 검증 트리거
+                        focusNext(this);
+                    }
                 });
             });
 
             function validateInput(input) {
-                const val = input.value;
-                const ans = input.dataAnswer || input.getAttribute('data-answer');
-                
-                // 초기화
-                input.classList.remove('correct', 'error');
+                const val = input.value.trim();
+                const ans = input.getAttribute('data-answer');
+                const wrapper = input.parentElement; // word-group
 
-                // 1. 정답 체크
-                if (val === ans) {
-                    input.classList.add('correct');
-                    // 다음 칸으로 자동 이동 (선택사항)
-                    // focusNext(input);
+                // 이미 정답처리 된 것은 패스
+                if (input.classList.contains('correct')) return;
+
+                // 1. 비어있으면 초기화 (검증 안함)
+                if (val === '') {
+                    input.classList.remove('error');
+                    wrapper.classList.remove('show-hint');
                     return;
                 }
 
-                // 2. 엄격한 오답 체크 (띄어쓰기, 길이 초과, 오타)
-                let isError = false;
-                if (val.includes(' ')) isError = true; // 공백 금지
-                if (val.length > ans.length) isError = true; // 길이 초과
-                if (val.length > 0 && !ans.startsWith(val)) isError = true; // 타이핑 중 오타
-
-                if (isError) {
+                // 2. 정답 체크
+                if (val === ans) {
+                    // 정답 로직
+                    input.classList.remove('error');
+                    wrapper.classList.remove('show-hint');
+                    input.classList.add('correct');
+                    input.readOnly = true; // 수정 불가
+                    
+                    animateXPChange(5, true); // +5 XP (시각적)
+                } 
+                else {
+                    // 오답 로직
                     input.classList.add('error');
-                    triggerPenalty();
-                    // 틀린 글자 지우기 (옵션: 사용자가 직접 지우게 할지, 자동 삭제할지)
-                    // input.value = val.slice(0, -1); 
+                    wrapper.classList.add('show-hint'); // 정답 말풍선 표시
+                    
+                    animateXPChange(5, false); // -5 XP (시각적)
+                    penaltyCount++; // 서버 기록용 페널티 증가
+                    document.getElementById('penalty_count').value = penaltyCount;
                 }
             }
 
-            function triggerPenalty() {
-                // 시각적 효과
-                const minus = document.createElement('span');
-                minus.className = 'xp-minus';
-                minus.innerText = '-2 XP';
-                minus.style.position = 'absolute';
-                minus.style.left = (xpDisplay.getBoundingClientRect().left + 20) + 'px';
-                minus.style.top = (xpDisplay.getBoundingClientRect().top - 20) + 'px';
-                document.body.appendChild(minus);
-                
-                setTimeout(() => minus.remove(), 500);
-
-                // 데이터 처리
-                currentXP -= 2; // 시각적 감소
-                penaltyCount++; // 서버 전송용 카운트
+            // XP 증가/감소 애니메이션 및 값 변경
+            function animateXPChange(amount, isGain) {
+                // 데이터 업데이트
+                if (isGain) currentXP += amount;
+                else currentXP -= amount;
                 xpDisplay.innerText = currentXP;
-                document.getElementById('penalty_count').value = penaltyCount;
+
+                // 애니메이션 효과
+                const anim = document.createElement('span');
+                anim.className = 'xp-anim ' + (isGain ? 'xp-plus' : 'xp-minus');
+                anim.innerText = isGain ? `+${amount} XP` : `-${amount} XP`;
+                
+                // 위치 잡기 (XP 바 근처)
+                const rect = xpDisplay.getBoundingClientRect();
+                anim.style.left = (rect.left + 20) + 'px';
+                anim.style.top = (rect.top - 20) + 'px';
+                
+                document.body.appendChild(anim);
+                setTimeout(() => anim.remove(), 800);
             }
 
             function checkAllFilled() {
+                // 모든 칸이 'correct' 상태여야 완료 가능
                 const allCorrect = Array.from(inputs).every(i => i.classList.contains('correct'));
-                const allFilled = Array.from(inputs).every(i => i.value.length > 0);
                 
                 if (allCorrect) {
                     submitBtn.innerText = "🎉 퀘스트 완료! 보상 받기";
                     submitBtn.disabled = false;
                     submitBtn.style.background = "#2ecc71";
-                    // 자동 제출 하려면: document.getElementById('game-form').submit();
                 } else {
                     submitBtn.disabled = true;
-                    submitBtn.innerText = "모두 정확히 채워주세요";
+                    submitBtn.innerText = "모두 정답을 맞춰주세요";
                     submitBtn.style.background = "#4a90e2";
                 }
             }
 
             function checkFinal() {
-                // 폼 제출
                 document.getElementById('game-form').submit();
             }
 
             function focusNext(current) {
-                const idx = Array.from(inputs).indexOf(current);
-                if (idx < inputs.length - 1) inputs[idx + 1].focus();
+                const arr = Array.from(inputs);
+                const idx = arr.indexOf(current);
+                if (idx < arr.length - 1) {
+                    // 다음 칸 중 아직 정답이 아닌 곳으로 이동
+                    for (let i = idx + 1; i < arr.length; i++) {
+                        if (!arr[i].readOnly) {
+                            arr[i].focus();
+                            break;
+                        }
+                    }
+                }
             }
         </script>
         {% endif %}
