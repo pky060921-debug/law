@@ -1,111 +1,93 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
-    <title>Sanctum of Knowledge</title>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sanctum of Knowledge</title>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Spectral:wght@400;600&display=swap" rel="stylesheet">
     <style>
+        /* [기본 테마 설정] */
         body {
             background: linear-gradient(135deg, #0d0d1a 0%, #1a0f2e 50%, #2c1e12 100%);
             color: #e8dcb5;
             font-family: 'Spectral', serif;
-            margin: 0; padding: 20px;
+            margin: 0; 
             min-height: 100vh;
         }
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-            background-color: rgba(30, 20, 10, 0.9);
-            border: 2px solid #d4af37;
-            border-radius: 10px;
-            padding: 25px;
-            box-shadow: 0 0 20px rgba(212, 175, 55, 0.2);
+
+        /* [상단 고정 네비게이션 바] - 요청하신 '더 보기 좋고 큰 메뉴' */
+        nav {
+            background: rgba(10, 5, 5, 0.95);
+            border-bottom: 2px solid #d4af37;
+            padding: 15px 0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+            text-align: center;
         }
+
+        .nav-link {
+            font-family: 'Cinzel Decorative', cursive;
+            color: #888;
+            text-decoration: none;
+            font-size: 1.2rem;
+            margin: 0 20px;
+            padding: 10px 15px;
+            border: 1px solid transparent;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            color: #d4af37;
+            border-color: #d4af37;
+            background: rgba(212, 175, 55, 0.1);
+            text-shadow: 0 0 8px rgba(212, 175, 55, 0.6);
+        }
+
+        /* [메인 컨테이너] */
+        .container {
+            max-width: 800px; /* 기존보다 조금 더 넓게 */
+            margin: 40px auto;
+            background-color: rgba(20, 15, 10, 0.85);
+            border: 1px solid #5e4b3c;
+            border-radius: 10px;
+            padding: 40px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+        }
+
+        /* [공통 스타일] */
         h1, h2, h3 {
             font-family: 'Cinzel Decorative', cursive;
             color: #d4af37;
             text-align: center;
-            text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
-            margin-top: 0;
+            text-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
         }
-        .btn {
-            background: linear-gradient(to bottom, #5e4b3c, #3d2b1f);
-            color: #d4af37;
-            border: 1px solid #d4af37;
-            padding: 12px;
-            width: 100%;
-            font-family: 'Cinzel Decorative';
-            font-size: 1.1rem;
-            cursor: pointer;
-            margin-top: 15px;
-            border-radius: 5px;
-            transition: 0.3s;
-        }
-        .btn:hover { box-shadow: 0 0 15px rgba(212, 175, 55, 0.5); }
-        
-        input[type="text"], input[type="password"] {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid #d4af37;
-            color: #e8dcb5;
-            padding: 12px;
-            width: 90%;
-            display: block;
-            margin: 10px auto;
-            border-radius: 5px;
-        }
-
-        /* 인라인 입력창 (문장 중간 빈칸) */
-        .magic-input {
-            display: inline-block;
-            background: transparent !important;
-            border: none !important;
-            border-bottom: 2px solid #d4af37 !important;
-            color: #00ffff !important;
-            width: 80px !important;
-            text-align: center;
-            font-weight: bold;
-            font-size: 1.1rem;
-            margin: 0 2px;
-            padding: 2px !important;
-            border-radius: 0 !important;
-        }
-        .magic-input:focus { outline: none; border-bottom: 2px solid #00ffff !important; }
 
         .flash { 
-            background: rgba(212, 175, 55, 0.1); 
+            background: rgba(100, 0, 0, 0.4); 
             border: 1px solid #d4af37; 
-            color: #d4af37; 
-            padding: 10px; 
+            color: #ffcccc; 
+            padding: 15px; 
             text-align: center; 
-            margin-bottom: 15px; 
+            margin-bottom: 20px; 
             border-radius: 5px;
-        }
-        
-        .nav { text-align: center; margin-bottom: 20px; border-bottom: 1px solid #444; padding-bottom: 10px;}
-        .nav a { color: #888; text-decoration: none; margin: 0 15px; font-size: 0.9rem; }
-        .nav a:hover { color: #d4af37; }
-        
-        /* 카드 스타일 */
-        .card {
-            background: rgba(0,0,0,0.3);
-            border: 1px solid #d4af37;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
         }
     </style>
 </head>
 <body>
+
+    {% if session.user_id %}
+    <nav>
+        <a href="/lobby" class="nav-link">🏰 중앙 홀</a>
+        <a href="/dungeon" class="nav-link">⚔️ 서고(던전)</a>
+        <a href="/collection" class="nav-link">📖 도감</a>
+        <a href="/logout" class="nav-link" style="color: #a33;">🚪 퇴장</a>
+    </nav>
+    {% endif %}
+
     <div class="container">
-        {% if session.user_id %}
-        <div class="nav">
-            <a href="/lobby">중앙 홀</a> | 
-            <a href="/dungeon">서고</a> | 
-            <a href="/collection">도감</a> | 
-            <a href="/logout">퇴장</a>
-        </div>
-        {% endif %}
-        
         {% with messages = get_flashed_messages() %}
             {% if messages %}
                 <div class="flash">{{ messages[0] }}</div>
@@ -114,5 +96,6 @@
         
         {% block content %}{% endblock %}
     </div>
+
 </body>
 </html>
