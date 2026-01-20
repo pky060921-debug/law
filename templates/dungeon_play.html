@@ -1,24 +1,97 @@
-{% extends "layout.html" %}
-{% block content %}
-    <h2 style="margin-bottom:30px;">✨ 주문 시전 중...</h2>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>플레이</title>
+    <style>
+        body { font-family: 'Pretendard', sans-serif; background-color: #1a1a1a; color: #fff; text-align: center; padding: 20px; }
+        .game-container { 
+            max-width: 800px; margin: 0 auto; background: #2a2a2a; padding: 30px; 
+            border-radius: 15px; box-shadow: 0 0 20px rgba(0,0,0,0.5); line-height: 2.2; 
+        }
+        .sentence-box { font-size: 1.2rem; text-align: left; word-break: keep-all; }
+        
+        /* 편집 모드 스타일 */
+        .word-token { cursor: pointer; padding: 2px 5px; margin: 2px; border-radius: 4px; transition: 0.2s; display: inline-block; }
+        .word-token:hover { background-color: #444; }
+        .word-token.selected { background-color: #ff6b6b; color: white; font-weight: bold; }
+        
+        /* 플레이 모드 스타일 */
+        input { background: transparent; border: none; border-bottom: 2px solid #ffd700; color: #ffd700; text-align: center; font-size: 1.1rem; width: 80px; margin: 0 5px; }
+        input:focus { outline: none; border-bottom: 2px solid #fff; }
+        
+        .btn { display: inline-block; width: 100%; padding: 15px; margin-top: 20px; background: #ffd700; color: #000; border: none; border-radius: 5px; font-weight: bold; font-size: 1.1rem; cursor: pointer; }
+        .flash { color: #ff6b6b; margin-bottom: 15px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>📜 주문서 해독</h1>
     
-    <div style="line-height: 2.2; font-size: 1.2rem; text-align: justify; background:rgba(0,0,0,0.3); padding:20px; border-radius:10px; border:1px solid #444;">
-        <form method="POST" autocomplete="off">
-            {% for part in parts %}
-                {% if part.type == 'text' %}
-                    {{ part.val }}
-                {% else %}
-                    <input type="text" name="answers" class="magic-input">
-                {% endif %}
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            {% for message in messages %}
+                <div class="flash">{{ message }}</div>
             {% endfor %}
-            
-            <div style="margin-top:40px;">
-                <button type="submit" class="btn">🔥 마법 발동 (정답 확인)</button>
+        {% endif %}
+    {% endwith %}
+
+    <div class="game-container">
+        
+        {% if edit_mode %}
+            <h3 style="color: #4a90e2;">👆 1회차: 빈칸으로 만들 단어를 터치하세요!</h3>
+            <div class="sentence-box" id="editor-area">
+                {% for word in words %}
+                    <span class="word-token" onclick="toggleWord(this)">{{ word }}</span>
+                {% endfor %}
             </div>
-        </form>
+            
+            <form method="POST" onsubmit="saveEditor()">
+                <input type="hidden" name="edited_content" id="hidden_content">
+                <button type="submit" class="btn" style="background: #4a90e2; color: white;">저장하고 암기 시작</button>
+            </form>
+
+            <script>
+                function toggleWord(el) {
+                    el.classList.toggle('selected');
+                }
+                function saveEditor() {
+                    const tokens = document.querySelectorAll('.word-token');
+                    let result = [];
+                    tokens.forEach(t => {
+                        if (t.classList.contains('selected')) {
+                            result.push("{" + t.innerText + "}");
+                        } else {
+                            result.push(t.innerText);
+                        }
+                    });
+                    // 공백으로 다시 합쳐서 전송
+                    document.getElementById('hidden_content').value = result.join(" ");
+                }
+            </script>
+
+        {% else %}
+            <form method="POST" autocomplete="off">
+                <div class="sentence-box">
+                    {% for part in parts %}
+                        {% if part.type == 'text' %}
+                            <span>{{ part.val }}</span>
+                        {% else %}
+                            <input type="text" name="answers" required placeholder="?">
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                
+                {% if has_blanks %}
+                    <button type="submit" class="btn">해독 확인</button>
+                {% else %}
+                    <button type="submit" class="btn">완료 (다음으로)</button>
+                {% endif %}
+                
+                <a href="{{ url_for('dungeon') }}" style="display:block; margin-top:15px; color:#888; font-size:0.9rem;">나가기</a>
+            </form>
+        {% endif %}
+        
     </div>
-    
-    <div style="text-align:center; margin-top:20px;">
-        <a href="/dungeon" style="color:#666; font-size:0.9rem;">집중이 깨졌습니다 (돌아가기)</a>
-    </div>
-{% endblock %}
+</body>
+</html>
