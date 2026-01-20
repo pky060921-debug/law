@@ -7,12 +7,12 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from authlib.integrations.flask_client import OAuth
-from werkzeug.middleware.proxy_fix import ProxyFix # [핵심] 배포 환경 호환성
+from werkzeug.middleware.proxy_fix import ProxyFix 
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'lord_of_blanks_key')
 
-# [중요] Render 서버의 HTTPS를 인식하도록 설정 (이게 없으면 무한 로딩/로그인 실패)
+# [중요] Render 배포 시 HTTPS 인식을 위해 필수 설정
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # --- 구글 OAuth 설정 ---
@@ -33,10 +33,11 @@ class GoogleSheetManager:
         self.users_ws = None
         self.quests_ws = None
         self.collections_ws = None
-        self.connect_db() 
+        self.connect_db() # 시작할 때 연결 시도
 
     def connect_db(self):
         try:
+            # 환경변수 확인
             json_creds = os.environ.get('GCP_CREDENTIALS')
             if not json_creds:
                 print("🚫 오류: Render 환경변수에 GCP_CREDENTIALS가 없습니다!")
@@ -46,7 +47,7 @@ class GoogleSheetManager:
             scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
             self.client = gspread.authorize(creds)
-            self.sheet = self.client.open("memory_game_db")
+            self.sheet = self.client.open("memory_game_db") # [중요] 시트 이름이 정확해야 함
 
             try: self.users_ws = self.sheet.worksheet("users")
             except: 
@@ -67,9 +68,12 @@ class GoogleSheetManager:
             return False
 
     def check_connection(self):
-        if self.users_ws is None: return self.connect_db()
+        # 연결 객체가 없으면 재연결 시도
+        if self.users_ws is None:
+            return self.connect_db()
         return True
 
+    # --- 메서드들 (연결 체크 로직 추가됨) ---
     def get_user_by_id(self, user_id):
         if not self.check_connection(): return None, None
         try:
@@ -250,9 +254,9 @@ def google_callback():
         user_info = token.get('userinfo')
         user_email = user_info['email']
         
-        # 1. DB 연결 확인
+        # 1. DB 연결 확인 (가장 중요한 부분!)
         if not gm.check_connection():
-            flash("🚨 서버 오류: 데이터베이스(구글 시트) 연결 실패. 관리자에게 문의하세요.")
+            flash("🚨 서버 오류: 데이터베이스(구글 시트)에 연결할 수 없습니다. 관리자에게 문의하세요.")
             return redirect(url_for('index'))
 
         # 2. 유저 확인 및 가입
@@ -261,7 +265,7 @@ def google_callback():
             gm.register_social(user_email)
             user_data, row_idx = gm.get_user_by_id(user_email)
             
-        # 3. 세션 처리
+        # 3. 로그인 세션 처리
         if user_data:
             session['user_id'] = user_email
             session['user_row_idx'] = row_idx
@@ -283,11 +287,15 @@ def google_callback():
 def login():
     uid = request.form.get('id')
     upw = request.form.get('pw')
+    
+    # 1. DB 연결 확인 (가장 중요한 부분!)
     if not gm.check_connection():
-        flash("DB 연결 실패. 서버 설정을 확인하세요.")
+        flash("🚫 데이터베이스 연결 실패! (서버 설정 오류)")
         return redirect(url_for('index'))
 
+    # 2. 로그인 시도
     user_data, row_idx = gm.login(uid, upw)
+    
     if user_data:
         session['user_id'] = uid
         session['user_row_idx'] = row_idx
@@ -296,7 +304,8 @@ def login():
         session['points'] = user_data.get('points', 0)
         return redirect(url_for('lobby'))
     
-    flash("로그인 실패! 아이디/비번 확인.")
+    # 3. 실패 시 메시지
+    flash("로그인 실패! 아이디 또는 비밀번호를 확인해주세요.")
     return redirect(url_for('index'))
 
 @app.route('/register', methods=['POST'])
@@ -399,5 +408,6 @@ def exchange():
     return jsonify({'success': False, 'msg': '교환 실패'})
 
 if __name__ == '__main__':
+    # 로컬 테스트 시 HTTPS 없이 구글 로그인 허용
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
     app.run(host='0.0.0.0', port=10000)
