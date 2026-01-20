@@ -7,12 +7,12 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from authlib.integrations.flask_client import OAuth
-from werkzeug.middleware.proxy_fix import ProxyFix # [필수] HTTPS 인식용
+from werkzeug.middleware.proxy_fix import ProxyFix # [필수] 배포 환경 호환성
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'lord_of_blanks_key')
 
-# [중요] Render 등 서버 배포 시 HTTPS 인식을 위해 필수
+# [중요] Render 배포 시 HTTPS 인식을 위해 필수 설정
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # --- 구글 OAuth 설정 ---
@@ -33,13 +33,14 @@ class GoogleSheetManager:
         self.users_ws = None
         self.quests_ws = None
         self.collections_ws = None
-        self.connect_db()
+        self.connect_db() # 시작할 때 연결 시도
 
     def connect_db(self):
         try:
+            # 환경변수 확인
             json_creds = os.environ.get('GCP_CREDENTIALS')
             if not json_creds:
-                print("🚫 GCP 자격 증명(GCP_CREDENTIALS)이 없습니다.")
+                print("🚫 오류: Render 환경변수에 GCP_CREDENTIALS가 없습니다!")
                 return False
             
             creds_dict = json.loads(json_creds)
@@ -67,56 +68,12 @@ class GoogleSheetManager:
             return False
 
     def check_connection(self):
+        # 연결이 안 되어 있으면 재시도
         if self.users_ws is None:
             return self.connect_db()
         return True
 
-    # --- 기존 메서드 ---
-    def get_quest_list(self):
-        if not self.check_connection(): return []
-        try: return self.quests_ws.get_all_records()
-        except: return []
-
-    def update_quest_content(self, quest_name, new_content):
-        if not self.check_connection(): return False
-        try:
-            cell = self.quests_ws.find(quest_name, in_column=1) 
-            if cell:
-                self.quests_ws.update_cell(cell.row, 2, new_content)
-                return True
-        except: return False
-
-    def save_split_quests(self, title_prefix, lines, creator):
-        if not self.check_connection(): return False
-        try:
-            today = str(datetime.date.today())
-            rows_to_add = []
-            existing = [str(r.get('quest_name')) for r in self.quests_ws.get_all_records()]
-            for i, line in enumerate(lines):
-                if not line.strip(): continue 
-                suffix = f"{i+1}"
-                quest_name = f"{title_prefix}-{suffix}"
-                if quest_name in existing: continue
-                rows_to_add.append([quest_name, line[:45000], creator, today])
-            if rows_to_add:
-                self.quests_ws.append_rows(rows_to_add)
-                return True, len(rows_to_add)
-            return False, 0
-        except: return False, 0
-
-    # --- 로그인 관련 ---
-    def login(self, user_id, password):
-        if not self.check_connection(): return None, None
-        try:
-            records = self.users_ws.get_all_records()
-            for i, row in enumerate(records):
-                if str(row['user_id']) == str(user_id) and str(row['password']) == str(password):
-                    row['points'] = row.get('points', 0)
-                    if row['points'] == '': row['points'] = 0
-                    return row, i + 2
-        except: pass
-        return None, None
-
+    # --- 메서드들 (연결 체크 추가됨) ---
     def get_user_by_id(self, user_id):
         if not self.check_connection(): return None, None
         try:
@@ -139,6 +96,18 @@ class GoogleSheetManager:
             return True
         except: return False
 
+    def login(self, user_id, password):
+        if not self.check_connection(): return None, None
+        try:
+            records = self.users_ws.get_all_records()
+            for i, row in enumerate(records):
+                if str(row['user_id']) == str(user_id) and str(row['password']) == str(password):
+                    row['points'] = row.get('points', 0)
+                    if row['points'] == '': row['points'] = 0
+                    return row, i + 2
+        except: pass
+        return None, None
+    
     def register(self, user_id, password):
         if not self.check_connection(): return False
         try:
@@ -149,9 +118,40 @@ class GoogleSheetManager:
             return True
         except: return False
 
+    def get_quest_list(self):
+        if not self.check_connection(): return []
+        try: return self.quests_ws.get_all_records()
+        except: return []
+
+    def update_quest_content(self, quest_name, new_content):
+        if not self.check_connection(): return False
+        try:
+            cell = self.quests_ws.find(quest_name, in_column=1) 
+            if cell:
+                self.quests_ws.update_cell(cell.row, 2, new_content)
+                return True
+        except: return False
+        
+    def save_split_quests(self, title_prefix, lines, creator):
+        if not self.check_connection(): return False
+        try:
+            today = str(datetime.date.today())
+            rows_to_add = []
+            existing = [str(r.get('quest_name')) for r in self.quests_ws.get_all_records()]
+            for i, line in enumerate(lines):
+                if not line.strip(): continue 
+                suffix = f"{i+1}"
+                quest_name = f"{title_prefix}-{suffix}"
+                if quest_name in existing: continue
+                rows_to_add.append([quest_name, line[:45000], creator, today])
+            if rows_to_add:
+                self.quests_ws.append_rows(rows_to_add)
+                return True, len(rows_to_add)
+            return False, 0
+        except: return False, 0
+
     def process_reward(self, user_id, card_text, current_level, current_xp, row_idx, quest_name):
         if not self.check_connection(): return "ERROR", 0, current_level, current_xp, "ERROR", 0
-        
         records = self.collections_ws.get_all_records()
         found_idx = -1
         current_count = 0
@@ -163,10 +163,8 @@ class GoogleSheetManager:
                 current_count = row.get('count', 1)
                 current_grade = row.get('grade', 'NORMAL')
                 break
-
-        status = ""
-        final_grade = current_grade
-
+        
+        status = ""; final_grade = current_grade
         if found_idx != -1:
             new_count = current_count + 1
             if new_count >= 10: new_grade = "LEGEND"
@@ -174,28 +172,21 @@ class GoogleSheetManager:
             else: new_grade = current_grade
             self.collections_ws.update_cell(found_idx, 6, new_count)
             self.collections_ws.update_cell(found_idx, 3, new_grade)
-            status = "UPGRADE"
-            final_grade = new_grade
-            xp_gain = 10 + (new_count * 2)
+            status = "UPGRADE"; final_grade = new_grade; xp_gain = 10 + (new_count * 2)
         else:
             rand = random.random()
             if rand < 0.05: final_grade = "LEGEND"
             elif rand < 0.20: final_grade = "RARE"
             else: final_grade = "NORMAL"
             self.collections_ws.append_row([user_id, card_text, final_grade, str(datetime.date.today()), quest_name, 1])
-            status = "NEW"
-            xp_gain = 50 if final_grade == "LEGEND" else 30 if final_grade == "RARE" else 20
+            status = "NEW"; xp_gain = 50 if final_grade == "LEGEND" else 30 if final_grade == "RARE" else 20
 
         new_xp = current_xp + xp_gain
         new_level, req_xp = current_level, current_level * 100
-        
-        if new_xp >= req_xp: 
-            new_level += 1
-            new_xp -= req_xp
+        if new_xp >= req_xp: new_level += 1; new_xp -= req_xp
             
         self.users_ws.update_cell(row_idx, 3, new_level)
         self.users_ws.update_cell(row_idx, 4, new_xp)
-        
         return final_grade, xp_gain, new_level, new_xp, status, current_count + 1 if found_idx != -1 else 1
 
     def get_collections(self, user_id):
@@ -210,9 +201,7 @@ class GoogleSheetManager:
         target_row = None
         for i, row in enumerate(records):
             if str(row['user_id']) == str(user_id) and row['card_text'] == card_text:
-                found_idx = i + 2
-                target_row = row
-                break
+                found_idx = i + 2; target_row = row; break
         
         if found_idx != -1 and target_row['count'] > 0:
             grade = target_row.get('grade', 'NORMAL')
@@ -224,7 +213,6 @@ class GoogleSheetManager:
             new_count = target_row['count'] - 1
             if new_count <= 0: self.collections_ws.delete_rows(found_idx)
             else: self.collections_ws.update_cell(found_idx, 6, new_count)
-                
             new_total_points = current_points + earned_points
             self.users_ws.update_cell(user_row_idx, 7, new_total_points)
             return True, earned_points, new_total_points
@@ -242,10 +230,7 @@ def parse_manual_blanks(text):
         start, end = match.span()
         answer = match.group(1).strip()
         if start > last_idx: parts.append({'type': 'text', 'val': text[last_idx:start]})
-        if answer:
-            parts.append({'type': 'input', 'id': input_id})
-            targets.append(answer)
-            input_id += 1
+        if answer: parts.append({'type': 'input', 'id': input_id}); targets.append(answer); input_id += 1
         last_idx = end
     if last_idx < len(text): parts.append({'type': 'text', 'val': text[last_idx:]})
     return parts, targets
@@ -269,9 +254,9 @@ def google_callback():
         user_info = token.get('userinfo')
         user_email = user_info['email']
         
-        # 1. DB 연결 확인
+        # 1. DB 연결 확인 (여기가 문제일 확률 높음)
         if not gm.check_connection():
-            flash("서버 DB 연결 오류! 관리자에게 문의하세요.")
+            flash("🚨 서버 오류: 데이터베이스(구글 시트)에 연결할 수 없습니다. 환경변수(GCP_CREDENTIALS)를 확인해주세요.")
             return redirect(url_for('index'))
 
         # 2. 유저 확인 및 가입
@@ -280,7 +265,7 @@ def google_callback():
             gm.register_social(user_email)
             user_data, row_idx = gm.get_user_by_id(user_email)
             
-        # 3. 로그인 세션 처리
+        # 3. 세션 처리
         if user_data:
             session['user_id'] = user_email
             session['user_row_idx'] = row_idx
@@ -294,7 +279,7 @@ def google_callback():
             
     except Exception as e:
         print(f"로그인 에러: {e}")
-        flash(f"로그인 오류 발생: {e}")
+        flash(f"구글 로그인 실패: {e}")
         
     return redirect(url_for('index'))
 
@@ -302,13 +287,11 @@ def google_callback():
 def login():
     uid = request.form.get('id')
     upw = request.form.get('pw')
-    
     if not gm.check_connection():
-        flash("DB 연결 실패. GCP_CREDENTIALS 설정을 확인하세요.")
+        flash("DB 연결 실패. 서버 설정을 확인하세요.")
         return redirect(url_for('index'))
 
     user_data, row_idx = gm.login(uid, upw)
-    
     if user_data:
         session['user_id'] = uid
         session['user_row_idx'] = row_idx
@@ -324,8 +307,12 @@ def login():
 def register():
     uid = request.form.get('new_id')
     upw = request.form.get('new_pw')
+    if not gm.check_connection():
+        flash("DB 연결 실패. 가입할 수 없습니다.")
+        return redirect(url_for('index'))
+
     if gm.register(uid, upw): flash("가입 성공! 로그인해주세요.")
-    else: flash("가입 실패 (중복 ID 또는 DB 오류)")
+    else: flash("가입 실패 (중복 ID)")
     return redirect(url_for('index'))
 
 @app.route('/logout')
