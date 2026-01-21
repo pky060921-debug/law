@@ -2,120 +2,67 @@
 
 {% block content %}
 <style>
-    /* [게임 영역 스타일 - 밀도 높임] */
+    /* [게임 영역 스타일] */
     .play-area {
         background: #34495e;
-        padding: 20px; /* 패딩 줄임 */
+        padding: 20px;
         border-radius: 15px;
         border: 2px solid #2c3e50;
         
-        /* [핵심 수정] 글씨와 간격 대폭 축소 */
-        line-height: 1.8;       /* 줄 간격 (3.2 -> 1.8) */
-        font-size: 1.1rem;      /* 글씨 크기 (1.4 -> 1.1) */
-        letter-spacing: -0.5px; /* 자간 좁힘 */
-        word-spacing: -1px;     /* 어절 간격 좁힘 */
+        line-height: 1.8;
+        font-size: 1.1rem;
+        letter-spacing: -0.5px;
+        word-spacing: -1px;
         
         text-align: left;
         word-break: keep-all;
         color: #ecf0f1;
     }
 
-    /* 편집 모드 단어 */
     .edit-token {
-        cursor: pointer;
-        padding: 1px 3px; /* 토큰 여백 최소화 */
-        border-radius: 4px;
-        border: 1px solid transparent;
-        transition: 0.2s;
-        display: inline-block;
+        cursor: pointer; padding: 1px 3px; border-radius: 4px; border: 1px solid transparent; transition: 0.2s; display: inline-block;
     }
-    .edit-token:hover {
-        background: rgba(243, 156, 18, 0.2);
-        border-color: #f39c12;
-    }
-    .edit-token.selected {
-        background: #e74c3c; 
-        color: #fff; 
-        font-weight: bold;
-        box-shadow: 0 2px 0 #c0392b; /* 그림자 축소 */
-        transform: translateY(-1px);
-    }
+    .edit-token:hover { background: rgba(243, 156, 18, 0.2); border-color: #f39c12; }
+    .edit-token.selected { background: #e74c3c; color: #fff; font-weight: bold; box-shadow: 0 2px 0 #c0392b; transform: translateY(-1px); }
     
-    .static-text {
-        color: #bdc3c7;
-        font-weight: normal;
-        margin: 0; /* 불필요한 여백 제거 */
-    }
+    .static-text { color: #bdc3c7; font-weight: normal; margin: 0; }
 
-    /* 입력창 스타일 */
     .quiz-input {
-        background: #2c3e50;
-        border: none;
-        border-bottom: 2px solid #7f8c8d; /* 밑줄 두께 축소 */
-        color: #f1c40f;
-        text-align: center;
-        
-        /* 입력창 글씨도 본문과 맞춤 */
-        font-size: 1.1rem; 
-        font-weight: bold;
-        padding: 0;
-        margin: 0 2px;
-        height: 1.4rem; /* 높이 고정 */
-        
-        font-family: 'Jua', sans-serif;
-        transition: 0.2s;
-        max-width: 100%;
+        background: #2c3e50; border: none; border-bottom: 2px solid #7f8c8d; color: #f1c40f; text-align: center;
+        font-size: 1.1rem; font-weight: bold; padding: 0; margin: 0 2px; height: 1.4rem;
+        font-family: 'Jua', sans-serif; transition: 0.2s; max-width: 100%;
     }
     .quiz-input:focus { outline: none; border-bottom-color: #f1c40f; background: #233140; }
     .quiz-input.correct { border-bottom-color: #2ecc71; color: #2ecc71; background: transparent; }
     .quiz-input.error { border-bottom-color: #e74c3c; color: #e74c3c; background: rgba(231, 76, 60, 0.1); animation: shake 0.3s; }
 
-    /* 정답 힌트 말풍선 */
     .answer-hint {
-        display: none;
-        position: absolute;
-        top: -30px; /* 위치 조정 */
-        left: 50%; transform: translateX(-50%);
-        background: #e74c3c; color: white; 
-        padding: 2px 6px; border-radius: 6px; 
-        font-size: 0.8rem; /* 힌트 글씨 축소 */
-        white-space: nowrap; z-index: 100;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-        border: 1px solid white;
+        display: none; position: absolute; top: -30px; left: 50%; transform: translateX(-50%);
+        background: #e74c3c; color: white; padding: 2px 6px; border-radius: 6px; 
+        font-size: 0.8rem; white-space: nowrap; z-index: 100; box-shadow: 0 2px 5px rgba(0,0,0,0.3); border: 1px solid white;
     }
     .input-wrapper { position: relative; display: inline-block; }
     .input-wrapper.show-hint .answer-hint { display: block; }
 
     .btn-action {
-        width: 100%;
-        padding: 12px; /* 버튼 높이 약간 축소 */
-        font-size: 1.2rem;
-        font-family: 'Black Han Sans';
-        border: none;
-        border-radius: 10px;
-        cursor: pointer;
-        margin-top: 20px;
-        transition: 0.2s;
+        width: 100%; padding: 12px; font-size: 1.2rem; font-family: 'Black Han Sans';
+        border: none; border-radius: 10px; cursor: pointer; margin-top: 20px; transition: 0.2s;
     }
     .btn-blue { background: #3498db; color: white; box-shadow: 0 4px 0 #2980b9; }
     .btn-blue:hover { transform: translateY(2px); box-shadow: 0 2px 0 #2980b9; }
 
+    /* 다음 단계 버튼 (초록색) */
+    .btn-next {
+        background: #27ae60; color: white; box-shadow: 0 4px 0 #219150; margin-top: 10px;
+        display: none; /* 기본 숨김 */
+    }
+    .btn-next:hover { transform: translateY(2px); box-shadow: 0 2px 0 #219150; }
+
     @keyframes shake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-3px);} 75%{transform:translateX(3px);} }
 
-    /* [모바일 반응형 추가 축소] */
     @media (max-width: 768px) {
-        .play-area {
-            font-size: 1rem;    /* 1.15 -> 1.0 */
-            line-height: 1.6;   /* 2.2 -> 1.6 (줄간격 매우 좁게) */
-            padding: 15px;
-        }
-        .quiz-input {
-            font-size: 1rem;
-            max-width: 100px;
-        }
-        .edit-token {
-            padding: 0 2px;
-        }
+        .play-area { font-size: 1rem; line-height: 1.6; padding: 15px; }
+        .quiz-input { font-size: 1rem; max-width: 100px; }
     }
 </style>
 
@@ -144,7 +91,7 @@
         <div class="play-area" id="game-board">
             {% for part in parts %}
                 {% if part.type == 'text' %}
-                    <span class="static-text">{{ part.val }}</span>
+                    <span class="static-text">{{ part.val | replace("①", "<br>①") | replace("②", "<br>②") | replace("③", "<br>③") | replace("④", "<br>④") | replace("⑤", "<br>⑤") | safe }}</span>
                 {% else %}
                     <span class="input-wrapper">
                         <span class="answer-hint">{{ targets[part.id] }}</span>
@@ -159,24 +106,26 @@
 
         <form method="POST" id="game-form">
             <input type="hidden" name="penalty_count" id="penalty_count" value="0">
-            {% for t in targets %}
-                <input type="hidden" name="answers" value="{{ t }}">
-            {% endfor %}
         </form>
         
         <button id="submit-btn" class="btn-action" onclick="checkFinal()" disabled 
                 style="background:#7f8c8d; color:#bdc3c7; cursor:not-allowed; box-shadow:none;">
             빈칸을 모두 채워주세요
         </button>
+
+        {% if next_quest %}
+        <form action="/dungeon" method="POST" style="margin:0;">
+            <input type="hidden" name="quest_select" value="{{ next_quest }}">
+            <button id="next-btn" class="btn-action btn-next">
+                ⏩ 다음 스테이지로 이동
+            </button>
+        </form>
+        {% endif %}
+
     {% endif %}
 </div>
 
 <script>
-    /* =========================================
-       [스크립트 로직]
-       ========================================= */
-    
-    // [A] 편집 모드 로직
     {% if edit_mode %}
         const rawContent = `{{ raw_content | safe }}`;
         const editBoard = document.getElementById('edit-board');
@@ -189,17 +138,14 @@
 
             paragraphs.forEach(para => {
                 if (!para.trim()) return;
-                html += '<div style="margin-bottom:10px;">'; // 문단 간격도 축소
-                
+                html += '<div style="margin-bottom:10px;">';
                 const chunks = para.split(/\s+/);
                 
                 chunks.forEach(chunk => {
                     const subTokens = chunk.split(/([^가-힣a-zA-Z0-9]+)/);
-
                     subTokens.forEach(token => {
                         if (!token) return;
                         const isWord = /[가-힣a-zA-Z0-9]/.test(token);
-
                         if (!isWord) {
                             tokenList.push({ text: token, type: 'static', selected: false });
                             html += `<span class="static-text">${token}</span>`;
@@ -207,30 +153,23 @@
                             let core = token;
                             let suffix = "";
                             const particles = ['으로', '에서', '부터', '까지', '은', '는', '이', '가', '을', '를', '에', '의', '와', '과', '로', '도', '만'];
-                            
                             for (let p of particles) {
                                 if (core.endsWith(p) && core.length > p.length) {
-                                    suffix = p;
-                                    core = core.substring(0, core.length - p.length);
-                                    break;
+                                    suffix = p; core = core.substring(0, core.length - p.length); break;
                                 }
                             }
-
                             const idx = tokenList.length;
                             tokenList.push({ text: core, type: 'word', selected: false });
                             html += `<span class="edit-token" onclick="toggleToken(${idx}, this)">${core}</span>`;
-
                             if (suffix) {
                                 tokenList.push({ text: suffix, type: 'static', selected: false });
                                 html += `<span class="static-text">${suffix}</span>`;
                             }
                         }
                     });
-                    
                     tokenList.push({ text: ' ', type: 'space', selected: false });
                     html += ' '; 
                 });
-                
                 html += '</div>';
             });
             editBoard.innerHTML = html;
@@ -239,7 +178,6 @@
         function toggleToken(idx, el) {
             const token = tokenList[idx];
             token.selected = !token.selected;
-            
             if (token.selected) el.classList.add('selected');
             else el.classList.remove('selected');
         }
@@ -247,23 +185,18 @@
         function submitEdit() {
             let result = "";
             tokenList.forEach(t => {
-                if (t.type === 'word' && t.selected) {
-                    result += `{${t.text}}`;
-                } else {
-                    result += t.text;
-                }
+                if (t.type === 'word' && t.selected) { result += `{${t.text}}`; } else { result += t.text; }
             });
             document.getElementById('edited_content').value = result;
             document.getElementById('edit-form').submit();
         }
-
         parseText(rawContent);
 
-    // [B] 게임 모드 로직
     {% else %}
         const inputs = document.querySelectorAll('.quiz-input');
         const xpDisplay = document.getElementById('xp-display');
         const submitBtn = document.getElementById('submit-btn');
+        const nextBtn = document.getElementById('next-btn');
         let currentXP = {{ session['xp'] }};
         let penaltyCount = 0;
 
@@ -304,26 +237,20 @@
         function updateXP(amount) {
             currentXP += amount;
             xpDisplay.innerText = currentXP;
-            
             const effect = document.createElement('span');
             effect.innerText = amount > 0 ? `+${amount}` : amount;
             effect.style.position = 'fixed';
             effect.style.color = amount > 0 ? '#2ecc71' : '#e74c3c';
             effect.style.fontWeight = 'bold';
-            effect.style.fontSize = '1.5rem'; // 효과 글씨도 약간 줄임
+            effect.style.fontSize = '1.5rem';
             effect.style.textShadow = '1px 1px 0 #000';
             effect.style.zIndex = '9999';
-            
             const rect = xpDisplay.getBoundingClientRect();
             effect.style.left = rect.left + 'px';
             effect.style.top = (rect.top - 30) + 'px';
             effect.style.transition = '1s';
-            
             document.body.appendChild(effect);
-            setTimeout(() => {
-                effect.style.top = (rect.top - 80) + 'px';
-                effect.style.opacity = 0;
-            }, 50);
+            setTimeout(() => { effect.style.top = (rect.top - 80) + 'px'; effect.style.opacity = 0; }, 50);
             setTimeout(() => effect.remove(), 1000);
         }
 
@@ -336,6 +263,11 @@
                 submitBtn.style.cursor = "pointer";
                 submitBtn.style.boxShadow = "0 4px 0 #27ae60";
                 submitBtn.innerText = "🎉 미션 성공! 보상 획득";
+                
+                // [신규] 다 맞추면 다음 버튼 보이기
+                if (nextBtn) {
+                    nextBtn.style.display = "block";
+                }
             }
         }
 
