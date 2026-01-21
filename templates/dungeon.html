@@ -2,10 +2,8 @@
 
 {% block content %}
 <style>
-    /* [UI 깨짐 방지 핵심] */
     * { box-sizing: border-box; }
 
-    /* [파일 업로드 섹션] */
     .upload-box {
         border: 2px dashed #5e4b3c;
         background: rgba(0,0,0,0.2);
@@ -14,86 +12,51 @@
         margin-top: 50px;
         text-align: center;
         width: 100%;
-        overflow: hidden; /* 넘침 방지 */
+        overflow: hidden; 
     }
     .upload-input {
-        background: #222;
-        border: 1px solid #444;
-        color: #ccc;
-        padding: 10px;
-        border-radius: 5px;
-        margin: 5px;
-        width: 90%;
-        max-width: 300px;
+        background: #222; border: 1px solid #444; color: #ccc; padding: 10px;
+        border-radius: 5px; margin: 5px; width: 90%; max-width: 300px;
     }
     .btn-upload {
-        background: #2c1e12;
-        color: #d4af37;
-        border: 1px solid #d4af37;
-        padding: 10px 20px;
-        cursor: pointer;
-        font-family: 'Cinzel Decorative';
-        margin-top: 10px;
+        background: #2c1e12; color: #d4af37; border: 1px solid #d4af37;
+        padding: 10px 20px; cursor: pointer; font-family: 'Cinzel Decorative'; margin-top: 10px;
     }
     .btn-upload:hover { background: #d4af37; color: #000; }
 
-    /* [퀘스트 그룹 버튼] */
     .quest-group-btn {
-        width: 100%;
-        text-align: left;
+        width: 100%; text-align: left;
         background: linear-gradient(to right, #1a0f2e, #2c1e12);
-        color: #d4af37;
-        padding: 20px;
-        margin-top: 15px;
-        border: 1px solid #5e4b3c;
-        border-radius: 8px;
-        font-family: 'Cinzel Decorative';
-        font-size: 1.2rem;
-        cursor: pointer;
-        transition: 0.3s;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+        color: #d4af37; padding: 15px; margin-top: 15px;
+        border: 1px solid #5e4b3c; border-radius: 8px;
+        font-family: 'Cinzel Decorative'; font-size: 1.2rem;
+        cursor: pointer; transition: 0.3s;
+        display: flex; justify-content: space-between; align-items: center;
     }
-    .quest-group-btn:hover {
-        box-shadow: 0 0 15px rgba(212, 175, 55, 0.3);
-        border-color: #d4af37;
-    }
+    .quest-group-btn:hover { box-shadow: 0 0 15px rgba(212, 175, 55, 0.3); border-color: #d4af37; }
 
-    /* [세부 챕터 목록] */
+    /* 삭제 버튼 스타일 */
+    .btn-delete {
+        background: #c0392b; color: white; border: none;
+        padding: 5px 10px; border-radius: 5px; font-size: 0.9rem; margin-left: 10px;
+        cursor: pointer; z-index: 10;
+    }
+    .btn-delete:hover { background: #e74c3c; }
+
     .chapter-list {
-        display: none;
-        background: rgba(0,0,0,0.5);
-        border: 1px solid #444;
-        border-top: none;
-        padding: 10px;
-        margin-bottom: 20px;
-        border-radius: 0 0 8px 8px;
-        width: 100%;
+        display: none; background: rgba(0,0,0,0.5); border: 1px solid #444;
+        border-top: none; padding: 10px; margin-bottom: 20px; border-radius: 0 0 8px 8px; width: 100%;
     }
 
     .chapter-item {
-        display: block;
-        width: 100%;
-        text-align: left;
-        background: transparent;
-        color: #aaa;
-        border: none;
-        padding: 12px;
-        border-bottom: 1px solid #333;
-        cursor: pointer;
-        transition: 0.2s;
-        font-family: 'Spectral';
-        font-size: 1rem;
+        display: block; width: 100%; text-align: left; background: transparent;
+        color: #aaa; border: none; padding: 12px; border-bottom: 1px solid #333;
+        cursor: pointer; transition: 0.2s; font-family: 'Spectral'; font-size: 1rem;
     }
-    .chapter-item:hover {
-        color: #fff;
-        background: rgba(212, 175, 55, 0.1);
-        padding-left: 20px;
-    }
+    .chapter-item:hover { color: #fff; background: rgba(212, 175, 55, 0.1); padding-left: 20px; }
 </style>
 
-<h1>⚔️ 지식의 서고 (던전)</h1>
+<h1>⚔️ 작전지역 (던전)</h1>
 <p style="text-align:center; color:#888;">훈련할 법령을 선택하십시오.</p>
 
 <div id="quest-container"></div>
@@ -114,27 +77,17 @@
 <script>
     const allQuests = {{ quests | tojson }};
     const container = document.getElementById('quest-container');
-    
     const groups = {};
     
     allQuests.forEach(q => {
-        // DB에 저장된 이름: "민법-제1조(목적)"
         let parts = q.quest_name.split('-');
         let title = parts[0]; 
         let subTitle = q.quest_name; 
-        
         if (parts.length > 1) {
-            // '-' 뒤에 있는 전체를 가져옴 (예: 제1조(목적))
             subTitle = q.quest_name.substring(title.length + 1);
         }
-
-        if (!groups[title]) {
-            groups[title] = [];
-        }
-        groups[title].push({
-            fullName: q.quest_name, 
-            displayName: subTitle   
-        });
+        if (!groups[title]) { groups[title] = []; }
+        groups[title].push({ fullName: q.quest_name, displayName: subTitle });
     });
 
     if (Object.keys(groups).length === 0) {
@@ -142,9 +95,39 @@
     }
 
     for (const [title, chapters] of Object.entries(groups)) {
+        // 그룹 버튼 컨테이너
         const groupBtn = document.createElement('div');
         groupBtn.className = 'quest-group-btn';
-        groupBtn.innerHTML = `<span>📂 ${title}</span> <span style="font-size:0.8em; color:#888;">${chapters.length}개 조항</span>`;
+        
+        // 제목 텍스트
+        const titleSpan = document.createElement('span');
+        titleSpan.innerHTML = `📂 ${title} <span style="font-size:0.7em; color:#888;">(${chapters.length}개)</span>`;
+        
+        // 삭제 폼 및 버튼 (이벤트 버블링 방지)
+        const deleteForm = document.createElement('form');
+        deleteForm.method = 'POST';
+        deleteForm.style.margin = '0';
+        deleteForm.onsubmit = (e) => {
+            if(!confirm(`정말로 '${title}' 법령을 모두 삭제하시겠습니까?\n복구할 수 없습니다.`)) {
+                e.preventDefault();
+            }
+        };
+        
+        const deleteInput = document.createElement('input');
+        deleteInput.type = 'hidden';
+        deleteInput.name = 'delete_group';
+        deleteInput.value = title;
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn-delete';
+        deleteBtn.innerHTML = '🗑️ 삭제';
+        deleteBtn.onclick = (e) => { e.stopPropagation(); }; // 버튼 눌렀을때 목록 안 열리게
+
+        deleteForm.appendChild(deleteInput);
+        deleteForm.appendChild(deleteBtn);
+        
+        groupBtn.appendChild(titleSpan);
+        groupBtn.appendChild(deleteForm);
         
         const listDiv = document.createElement('div');
         listDiv.className = 'chapter-list';
@@ -162,11 +145,8 @@
             btn.className = 'chapter-item';
             btn.type = 'submit';
             
-            // [수정] 이미 이름이 '제1조' 형식이면 그대로 출력, 숫자만 있으면 '제 N 조' 붙임
             let viewName = chap.displayName;
-            if (/^\d+$/.test(viewName)) {
-                viewName = `제 ${viewName} 조`;
-            }
+            if (/^\d+$/.test(viewName)) { viewName = `제 ${viewName} 조`; }
             btn.innerText = `📄 ${viewName}`;
 
             form.appendChild(input);
