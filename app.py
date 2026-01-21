@@ -12,7 +12,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'lord_of_blanks_key')
 
-# [중요] Render 배포 시 HTTPS 인식을 위해 필수 설정
+# [중요] Render 배포 시 HTTPS 인식
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # --- 구글 OAuth 설정 ---
@@ -33,7 +33,6 @@ class GoogleSheetManager:
         self.users_ws = None
         self.quests_ws = None
         self.collections_ws = None
-        # 사용할 유저 시트 헤더 정의
         self.USER_HEADERS = ["user_id", "password", "level", "xp", "title", "last_idx", "points"]
         self.connect_db() 
 
@@ -41,7 +40,7 @@ class GoogleSheetManager:
         try:
             json_creds = os.environ.get('GCP_CREDENTIALS')
             if not json_creds:
-                print("🚫 오류: Render 환경변수에 GCP_CREDENTIALS가 없습니다!")
+                print("🚫 오류: Render 환경변수 확인 필요")
                 return False
             
             creds_dict = json.loads(json_creds)
@@ -52,10 +51,7 @@ class GoogleSheetManager:
 
             try: self.users_ws = self.sheet.worksheet("users")
             except: self.users_ws = self.sheet.add_worksheet("users", 100, 10)
-            
-            # 헤더가 없으면 추가
-            if not self.users_ws.get_all_values():
-                self.users_ws.append_row(self.USER_HEADERS)
+            if not self.users_ws.get_all_values(): self.users_ws.append_row(self.USER_HEADERS)
 
             try: self.collections_ws = self.sheet.worksheet("collections")
             except: self.collections_ws = self.sheet.add_worksheet("collections", 100, 10)
@@ -73,30 +69,24 @@ class GoogleSheetManager:
         if self.users_ws is None: return self.connect_db()
         return True
 
-    # [핵심] 빈칸 헤더 에러 방지 함수
     def get_safe_records(self, worksheet, headers_list):
         try:
             rows = worksheet.get_all_values()
             if len(rows) < 2: return [] 
-            
             records = []
             for row in rows[1:]: 
                 padded_row = row + [""] * (len(headers_list) - len(row))
                 record = dict(zip(headers_list, padded_row))
                 records.append(record)
             return records
-        except Exception as e:
-            print(f"데이터 읽기 오류: {e}")
-            return []
+        except Exception as e: return []
 
-    # --- 유저 관련 ---
     def get_user_by_id(self, user_id):
         if not self.check_connection(): return None, None
         try:
             records = self.get_safe_records(self.users_ws, self.USER_HEADERS)
             for i, row in enumerate(records):
                 if str(row['user_id']) == str(user_id):
-                    # 숫자 안전 변환
                     try: row['points'] = int(row.get('points', 0) or 0)
                     except: row['points'] = 0
                     try: row['level'] = int(row.get('level', 1) or 1)
@@ -112,13 +102,10 @@ class GoogleSheetManager:
         try:
             user_data, _ = self.get_user_by_id(user_id)
             if user_data: return True, "이미 존재함"
-            
             self.users_ws.append_row([user_id, "SOCIAL_LOGIN", 1, 0, "빈칸 견습생", 0, 0])
             return True, "가입 성공"
-        except Exception as e:
-            return False, str(e)
+        except Exception as e: return False, str(e)
 
-    # --- 퀘스트 및 보상 ---
     def get_quest_list(self):
         if not self.check_connection(): return []
         try: return self.quests_ws.get_all_records()
@@ -139,12 +126,30 @@ class GoogleSheetManager:
             today = str(datetime.date.today())
             rows_to_add = []
             existing = [str(r.get('quest_name')) for r in self.quests_ws.get_all_records()]
+            
             for i, line in enumerate(lines):
                 if not line.strip(): continue 
-                suffix = f"{i+1}"
+                
+                # [핵심 로직 변경] 법령 헤더 자동 추출
+                # 예: "제1조(목적)", "령제5조", "제 10 조" 등 정규식 매칭
+                # ^ : 문장 시작
+                # (?:령)? : '령' 글자가 있을수도 없을수도 있음
+                # 제 : '제' 글자
+                # \s*\d+\s* : 공백포함 숫자
+                # 조 : '조' 글자
+                # (?:\(.*?\))? : 괄호와 그 안의 내용이 있을수도 없을수도 있음 (예: (목적))
+                match = re.match(r'^((?:령)?제\s*\d+\s*조(?:\(.*?\))?)', line.strip())
+                
+                if match:
+                    suffix = match.group(1) # 매칭된 헤더 사용 (예: 제1조(목적))
+                else:
+                    suffix = str(i + 1) # 매칭 안되면 그냥 번호 사용
+                
                 quest_name = f"{title_prefix}-{suffix}"
+                
                 if quest_name in existing: continue
                 rows_to_add.append([quest_name, line[:45000], creator, today])
+                
             if rows_to_add:
                 self.quests_ws.append_rows(rows_to_add)
                 return True, len(rows_to_add)
@@ -236,6 +241,19 @@ def parse_manual_blanks(text):
     if last_idx < len(text): parts.append({'type': 'text', 'val': text[last_idx:]})
     return parts, targets
 
+# --- [수정] 자연스러운 숫자 정렬 함수 ---
+def natural_sort_key(q):
+    name = q.get('quest_name', '')
+    # '-' 기준으로 뒤쪽(챕터명) 분리
+    if '-' in name:
+        prefix, suffix = name.rsplit('-', 1)
+        # suffix에서 숫자만 추출 (예: '제10조' -> 10)
+        nums = re.findall(r'\d+', suffix)
+        if nums:
+            return (prefix, int(nums[0]), suffix) # (제목, 숫자값, 원래문자열) 순서 정렬
+        return (prefix, 0, suffix)
+    return (name, 0, "")
+
 # --- 라우트 ---
 
 @app.route('/')
@@ -320,8 +338,10 @@ def dungeon():
                 if success: flash(f"{count}개의 스테이지 생성!")
                 else: flash("저장 실패")
             return redirect(url_for('dungeon'))
+    
     quests = gm.get_quest_list()
-    quests.sort(key=lambda x: x.get('quest_name', ''))
+    # [수정] 자연스러운 정렬 적용
+    quests.sort(key=natural_sort_key)
     return render_template('dungeon.html', quests=quests)
 
 @app.route('/dungeon/play', methods=['GET', 'POST'])
