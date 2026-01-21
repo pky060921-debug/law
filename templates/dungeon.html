@@ -2,7 +2,10 @@
 
 {% block content %}
 <style>
-    /* [파일 업로드 섹션 스타일] */
+    /* [UI 깨짐 방지 핵심] */
+    * { box-sizing: border-box; }
+
+    /* [파일 업로드 섹션] */
     .upload-box {
         border: 2px dashed #5e4b3c;
         background: rgba(0,0,0,0.2);
@@ -10,6 +13,8 @@
         border-radius: 10px;
         margin-top: 50px;
         text-align: center;
+        width: 100%;
+        overflow: hidden; /* 넘침 방지 */
     }
     .upload-input {
         background: #222;
@@ -18,6 +23,8 @@
         padding: 10px;
         border-radius: 5px;
         margin: 5px;
+        width: 90%;
+        max-width: 300px;
     }
     .btn-upload {
         background: #2c1e12;
@@ -26,10 +33,11 @@
         padding: 10px 20px;
         cursor: pointer;
         font-family: 'Cinzel Decorative';
+        margin-top: 10px;
     }
     .btn-upload:hover { background: #d4af37; color: #000; }
 
-    /* [퀘스트 그룹 버튼 스타일] */
+    /* [퀘스트 그룹 버튼] */
     .quest-group-btn {
         width: 100%;
         text-align: left;
@@ -52,18 +60,18 @@
         border-color: #d4af37;
     }
 
-    /* [세부 챕터 목록 (숨김 상태)] */
+    /* [세부 챕터 목록] */
     .chapter-list {
-        display: none; /* 기본 숨김 */
+        display: none;
         background: rgba(0,0,0,0.5);
         border: 1px solid #444;
         border-top: none;
         padding: 10px;
         margin-bottom: 20px;
         border-radius: 0 0 8px 8px;
+        width: 100%;
     }
 
-    /* [세부 챕터 버튼] */
     .chapter-item {
         display: block;
         width: 100%;
@@ -81,21 +89,20 @@
     .chapter-item:hover {
         color: #fff;
         background: rgba(212, 175, 55, 0.1);
-        padding-left: 20px; /* 살짝 오른쪽으로 이동 효과 */
+        padding-left: 20px;
     }
 </style>
 
 <h1>⚔️ 지식의 서고 (던전)</h1>
 <p style="text-align:center; color:#888;">훈련할 법령을 선택하십시오.</p>
 
-<div id="quest-container">
-    </div>
+<div id="quest-container"></div>
 
 <div class="upload-box">
     <h3 style="margin-top:0;">📜 신규 법령 등록</h3>
     <p style="font-size: 0.9rem; color: #888;">
-        텍스트 파일을 업로드하면 엔터 단위로 챕터가 자동 생성됩니다.<br>
-        제목 예: '민법' 입력 시 -> 민법-1, 민법-2... 로 생성
+        텍스트 파일의 내용을 자동으로 분석합니다.<br>
+        (예: '제1조(목적)...' -> '제1조(목적)' 챕터 생성)
     </p>
     <form method="POST" enctype="multipart/form-data">
         <input type="text" class="upload-input" name="new_q_name" placeholder="법령 제목 (예: 민법)" required>
@@ -105,51 +112,44 @@
 </div>
 
 <script>
-    // Flask에서 넘겨준 퀘스트 데이터를 JS로 가져옴
     const allQuests = {{ quests | tojson }};
     const container = document.getElementById('quest-container');
     
-    // 1. 데이터를 제목별로 그룹화 (예: '민법-1', '민법-2' -> '민법' 그룹)
     const groups = {};
     
     allQuests.forEach(q => {
-        // 이름이 "제목-번호" 형식이 아니더라도 처리 가능하도록 로직 구성
+        // DB에 저장된 이름: "민법-제1조(목적)"
         let parts = q.quest_name.split('-');
-        let title = parts[0]; // "민법"
-        let subTitle = q.quest_name; // 기본값
+        let title = parts[0]; 
+        let subTitle = q.quest_name; 
         
-        // "-"가 있다면 뒷부분을 세부 제목으로 사용
         if (parts.length > 1) {
-            subTitle = q.quest_name.substring(title.length + 1); // "1", "제1조" 등
+            // '-' 뒤에 있는 전체를 가져옴 (예: 제1조(목적))
+            subTitle = q.quest_name.substring(title.length + 1);
         }
 
         if (!groups[title]) {
             groups[title] = [];
         }
         groups[title].push({
-            fullName: q.quest_name, // 서버에 보낼 실제 이름
-            displayName: subTitle   // 화면에 보여줄 이름
+            fullName: q.quest_name, 
+            displayName: subTitle   
         });
     });
 
-    // 2. HTML 생성
     if (Object.keys(groups).length === 0) {
         container.innerHTML = "<div style='text-align:center; padding:30px; color:#666;'>등록된 퀘스트가 없습니다.</div>";
     }
 
     for (const [title, chapters] of Object.entries(groups)) {
-        // (1) 그룹 버튼 생성 (예: 민법)
         const groupBtn = document.createElement('div');
         groupBtn.className = 'quest-group-btn';
         groupBtn.innerHTML = `<span>📂 ${title}</span> <span style="font-size:0.8em; color:#888;">${chapters.length}개 조항</span>`;
         
-        // (2) 세부 목록 컨테이너 생성
         const listDiv = document.createElement('div');
         listDiv.className = 'chapter-list';
 
-        // (3) 각 챕터 버튼 생성
         chapters.forEach(chap => {
-            // 버튼을 감싸는 폼 생성 (POST 전송을 위해)
             const form = document.createElement('form');
             form.method = 'POST';
             
@@ -162,9 +162,9 @@
             btn.className = 'chapter-item';
             btn.type = 'submit';
             
-            // 챕터 이름 꾸미기 (숫자만 있으면 '제N조' 붙이기, 아니면 그대로)
+            // [수정] 이미 이름이 '제1조' 형식이면 그대로 출력, 숫자만 있으면 '제 N 조' 붙임
             let viewName = chap.displayName;
-            if (!isNaN(viewName)) {
+            if (/^\d+$/.test(viewName)) {
                 viewName = `제 ${viewName} 조`;
             }
             btn.innerText = `📄 ${viewName}`;
@@ -174,12 +174,9 @@
             listDiv.appendChild(form);
         });
 
-        // (4) 클릭 이벤트 (열고 닫기)
         groupBtn.onclick = () => {
             const isVisible = listDiv.style.display === 'block';
-            // 기존에 열린 다른 메뉴 닫기 (선택사항 - 원치 않으면 이 줄 삭제)
             document.querySelectorAll('.chapter-list').forEach(el => el.style.display = 'none');
-            
             listDiv.style.display = isVisible ? 'none' : 'block';
         };
 
