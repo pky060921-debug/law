@@ -2,14 +2,19 @@
 
 {% block content %}
 <style>
-    /* [편집/게임 영역 스타일 개선] */
+    /* [게임 영역 스타일 - 밀도 높임] */
     .play-area {
         background: #34495e;
-        padding: 30px;
+        padding: 20px; /* 패딩 줄임 */
         border-radius: 15px;
         border: 2px solid #2c3e50;
-        line-height: 3.2; /* 줄간격 넓게 */
-        font-size: 1.4rem; /* 글씨 크게 */
+        
+        /* [핵심 수정] 글씨와 간격 대폭 축소 */
+        line-height: 1.8;       /* 줄 간격 (3.2 -> 1.8) */
+        font-size: 1.1rem;      /* 글씨 크기 (1.4 -> 1.1) */
+        letter-spacing: -0.5px; /* 자간 좁힘 */
+        word-spacing: -1px;     /* 어절 간격 좁힘 */
+        
         text-align: left;
         word-break: keep-all;
         color: #ecf0f1;
@@ -18,8 +23,8 @@
     /* 편집 모드 단어 */
     .edit-token {
         cursor: pointer;
-        padding: 4px 8px;
-        border-radius: 6px;
+        padding: 1px 3px; /* 토큰 여백 최소화 */
+        border-radius: 4px;
         border: 1px solid transparent;
         transition: 0.2s;
         display: inline-block;
@@ -29,89 +34,96 @@
         border-color: #f39c12;
     }
     .edit-token.selected {
-        background: #e74c3c; /* 선택시 붉은색 (히어로 느낌) */
-        color: #fff;
+        background: #e74c3c; 
+        color: #fff; 
         font-weight: bold;
-        box-shadow: 0 4px 0 #c0392b;
-        transform: translateY(-2px);
+        box-shadow: 0 2px 0 #c0392b; /* 그림자 축소 */
+        transform: translateY(-1px);
     }
     
-    /* 정적 텍스트 (조사, 문장부호 등) - 가독성 높임 */
     .static-text {
-        color: #bdc3c7; /* 밝은 회색으로 변경 */
+        color: #bdc3c7;
         font-weight: normal;
-        margin: 0 1px;
+        margin: 0; /* 불필요한 여백 제거 */
     }
 
     /* 입력창 스타일 */
     .quiz-input {
         background: #2c3e50;
         border: none;
-        border-bottom: 3px solid #7f8c8d;
-        color: #f1c40f; /* 입력 글씨 노란색 */
+        border-bottom: 2px solid #7f8c8d; /* 밑줄 두께 축소 */
+        color: #f1c40f;
         text-align: center;
-        font-size: 1.4rem;
+        
+        /* 입력창 글씨도 본문과 맞춤 */
+        font-size: 1.1rem; 
         font-weight: bold;
-        padding: 2px 0;
-        margin: 0 4px;
+        padding: 0;
+        margin: 0 2px;
+        height: 1.4rem; /* 높이 고정 */
+        
         font-family: 'Jua', sans-serif;
         transition: 0.2s;
+        max-width: 100%;
     }
-    .quiz-input:focus { 
-        outline: none; 
-        border-bottom-color: #f1c40f; 
-        background: #233140; 
-    }
-    .quiz-input.correct { 
-        border-bottom-color: #2ecc71; 
-        color: #2ecc71; 
-        background: transparent;
-    }
-    .quiz-input.error { 
-        border-bottom-color: #e74c3c; 
-        color: #e74c3c; 
-        background: rgba(231, 76, 60, 0.1);
-        animation: shake 0.3s; 
-    }
+    .quiz-input:focus { outline: none; border-bottom-color: #f1c40f; background: #233140; }
+    .quiz-input.correct { border-bottom-color: #2ecc71; color: #2ecc71; background: transparent; }
+    .quiz-input.error { border-bottom-color: #e74c3c; color: #e74c3c; background: rgba(231, 76, 60, 0.1); animation: shake 0.3s; }
 
     /* 정답 힌트 말풍선 */
     .answer-hint {
         display: none;
         position: absolute;
-        top: -45px; left: 50%; transform: translateX(-50%);
+        top: -30px; /* 위치 조정 */
+        left: 50%; transform: translateX(-50%);
         background: #e74c3c; color: white; 
-        padding: 5px 10px; border-radius: 8px; 
-        font-size: 1rem; white-space: nowrap; z-index: 100;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-        border: 2px solid white;
+        padding: 2px 6px; border-radius: 6px; 
+        font-size: 0.8rem; /* 힌트 글씨 축소 */
+        white-space: nowrap; z-index: 100;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        border: 1px solid white;
     }
     .input-wrapper { position: relative; display: inline-block; }
     .input-wrapper.show-hint .answer-hint { display: block; }
 
-    /* 버튼 스타일 */
     .btn-action {
         width: 100%;
-        padding: 15px;
-        font-size: 1.3rem;
+        padding: 12px; /* 버튼 높이 약간 축소 */
+        font-size: 1.2rem;
         font-family: 'Black Han Sans';
         border: none;
         border-radius: 10px;
         cursor: pointer;
-        margin-top: 30px;
+        margin-top: 20px;
         transition: 0.2s;
     }
-    .btn-blue { background: #3498db; color: white; box-shadow: 0 5px 0 #2980b9; }
+    .btn-blue { background: #3498db; color: white; box-shadow: 0 4px 0 #2980b9; }
     .btn-blue:hover { transform: translateY(2px); box-shadow: 0 2px 0 #2980b9; }
 
-    @keyframes shake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-5px);} 75%{transform:translateX(5px);} }
+    @keyframes shake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-3px);} 75%{transform:translateX(3px);} }
+
+    /* [모바일 반응형 추가 축소] */
+    @media (max-width: 768px) {
+        .play-area {
+            font-size: 1rem;    /* 1.15 -> 1.0 */
+            line-height: 1.6;   /* 2.2 -> 1.6 (줄간격 매우 좁게) */
+            padding: 15px;
+        }
+        .quiz-input {
+            font-size: 1rem;
+            max-width: 100px;
+        }
+        .edit-token {
+            padding: 0 2px;
+        }
+    }
 </style>
 
 <div style="text-align: center;">
     {% if edit_mode %}
-        <h2 style="color: #f39c12;">✏️ 작전 설계 (빈칸 만들기)</h2>
-        <p style="color:#bdc3c7; font-size:1.1rem; margin-bottom:20px;">
-            클릭하여 빈칸으로 만들 단어를 선택하세요.<br>
-            (문장부호와 조사는 자동으로 분리되어 선택되지 않습니다.)
+        <h3 style="color: #f39c12; margin-top:0;">✏️ 빈칸 만들기</h3>
+        <p style="color:#bdc3c7; font-size:0.9rem; margin-bottom:15px;">
+            단어를 터치하여 빈칸을 만드세요.
         </p>
 
         <div id="edit-board" class="play-area"></div>
@@ -119,14 +131,14 @@
         <form method="POST" id="edit-form">
             <input type="hidden" name="edited_content" id="edited_content">
             <button type="button" class="btn-action btn-blue" onclick="submitEdit()">
-                설정 완료! 작전 개시 🚀
+                작전 개시 🚀
             </button>
         </form>
 
     {% else %}
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-            <a href="/dungeon" style="text-decoration:none; color:#bdc3c7; font-size:1.2rem;">🔙 후퇴하기</a>
-            <div style="font-size:1.5rem; color:#f1c40f; font-weight:bold;">EXP: <span id="xp-display">{{ session['xp'] }}</span></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <a href="/dungeon" style="text-decoration:none; color:#bdc3c7; font-size:1rem;">🔙 뒤로</a>
+            <div style="font-size:1.2rem; color:#f1c40f; font-weight:bold;">EXP: <span id="xp-display">{{ session['xp'] }}</span></div>
         </div>
 
         <div class="play-area" id="game-board">
@@ -138,7 +150,7 @@
                         <span class="answer-hint">{{ targets[part.id] }}</span>
                         <input type="text" class="quiz-input" 
                                data-answer="{{ targets[part.id] }}" 
-                               style="width:{{ targets[part.id]|length * 20 + 20 }}px;"
+                               style="width:{{ targets[part.id]|length * 12 + 10 }}px;" 
                                autocomplete="off">
                     </span>
                 {% endif %}
@@ -154,7 +166,7 @@
         
         <button id="submit-btn" class="btn-action" onclick="checkFinal()" disabled 
                 style="background:#7f8c8d; color:#bdc3c7; cursor:not-allowed; box-shadow:none;">
-            모든 빈칸을 채워주세요
+            빈칸을 모두 채워주세요
         </button>
     {% endif %}
 </div>
@@ -164,7 +176,7 @@
        [스크립트 로직]
        ========================================= */
     
-    // [A] 편집 모드 로직 (버그 수정됨)
+    // [A] 편집 모드 로직
     {% if edit_mode %}
         const rawContent = `{{ raw_content | safe }}`;
         const editBoard = document.getElementById('edit-board');
@@ -177,28 +189,21 @@
 
             paragraphs.forEach(para => {
                 if (!para.trim()) return;
-                html += '<div style="margin-bottom:20px;">';
+                html += '<div style="margin-bottom:10px;">'; // 문단 간격도 축소
                 
-                // 1. 공백(어절) 단위로 먼저 나눔
                 const chunks = para.split(/\s+/);
                 
                 chunks.forEach(chunk => {
-                    // [핵심 수정] 한글/영어/숫자가 "아닌" 모든 문자를 구분자로 사용
-                    // 즉, · . , ( ) [ ] 등의 모든 기호가 분리됨
                     const subTokens = chunk.split(/([^가-힣a-zA-Z0-9]+)/);
 
                     subTokens.forEach(token => {
                         if (!token) return;
-
-                        // 한글, 영어, 숫자가 하나라도 있으면 "단어"로 취급
                         const isWord = /[가-힣a-zA-Z0-9]/.test(token);
 
                         if (!isWord) {
-                            // 특수문자/기호 -> 선택 불가
                             tokenList.push({ text: token, type: 'static', selected: false });
                             html += `<span class="static-text">${token}</span>`;
                         } else {
-                            // 단어 -> 조사 분리 로직 수행
                             let core = token;
                             let suffix = "";
                             const particles = ['으로', '에서', '부터', '까지', '은', '는', '이', '가', '을', '를', '에', '의', '와', '과', '로', '도', '만'];
@@ -211,12 +216,10 @@
                                 }
                             }
 
-                            // 핵심 단어 (선택 가능)
                             const idx = tokenList.length;
                             tokenList.push({ text: core, type: 'word', selected: false });
                             html += `<span class="edit-token" onclick="toggleToken(${idx}, this)">${core}</span>`;
 
-                            // 분리된 조사 (선택 불가)
                             if (suffix) {
                                 tokenList.push({ text: suffix, type: 'static', selected: false });
                                 html += `<span class="static-text">${suffix}</span>`;
@@ -224,7 +227,6 @@
                         }
                     });
                     
-                    // 어절 사이 띄어쓰기 복원
                     tokenList.push({ text: ' ', type: 'space', selected: false });
                     html += ' '; 
                 });
@@ -303,14 +305,13 @@
             currentXP += amount;
             xpDisplay.innerText = currentXP;
             
-            // 시각 효과
             const effect = document.createElement('span');
             effect.innerText = amount > 0 ? `+${amount}` : amount;
             effect.style.position = 'fixed';
             effect.style.color = amount > 0 ? '#2ecc71' : '#e74c3c';
             effect.style.fontWeight = 'bold';
-            effect.style.fontSize = '2rem';
-            effect.style.textShadow = '2px 2px 0 #000';
+            effect.style.fontSize = '1.5rem'; // 효과 글씨도 약간 줄임
+            effect.style.textShadow = '1px 1px 0 #000';
             effect.style.zIndex = '9999';
             
             const rect = xpDisplay.getBoundingClientRect();
@@ -333,7 +334,7 @@
                 submitBtn.style.background = "#2ecc71";
                 submitBtn.style.color = "white";
                 submitBtn.style.cursor = "pointer";
-                submitBtn.style.boxShadow = "0 5px 0 #27ae60";
+                submitBtn.style.boxShadow = "0 4px 0 #27ae60";
                 submitBtn.innerText = "🎉 미션 성공! 보상 획득";
             }
         }
