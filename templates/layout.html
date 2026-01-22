@@ -4,21 +4,40 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>빈칸맨 : 암기의 히어로</title>
+    
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#f39c12">
+    <link rel="apple-touch-icon" href="/static/icon.png">
+    
+    <script>
+        // 서비스 워커 등록 (앱 설치 기능 활성화)
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js')
+                .then(function(registration) {
+                    console.log('Service Worker registered with scope:', registration.scope);
+                })
+                .catch(function(error) {
+                    console.log('Service Worker registration failed:', error);
+                });
+        }
+    </script>
+
     <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Jua&display=swap" rel="stylesheet">
+    
     <style>
         /* [빈칸맨 히어로 테마] */
         body {
-            background-color: #1a252f;
+            background-color: #1a252f; /* 짙은 네이비 */
             color: #ecf0f1;
-            font-family: 'Jua', sans-serif;
+            font-family: 'Jua', sans-serif; /* 둥글고 잘 보이는 폰트 */
             margin: 0; 
             min-height: 100vh;
-            font-size: 16px; /* [수정] 기본 글씨 크기 축소 (18->16) */
+            font-size: 16px; /* 기본 글씨 크기 (PC) */
         }
 
         /* 상단 네비게이션 */
         nav {
-            background: #f39c12;
+            background: #f39c12; /* 히어로 옐로우 */
             border-bottom: 4px solid #d35400;
             padding: 10px 0;
             position: sticky;
@@ -32,7 +51,7 @@
             font-family: 'Black Han Sans', sans-serif;
             color: #2c3e50;
             text-decoration: none;
-            font-size: 1.3rem; /* 메뉴 글씨도 조금 축소 */
+            font-size: 1.3rem;
             margin: 0 8px;
             padding: 6px 12px;
             border-radius: 8px;
@@ -51,10 +70,10 @@
         .container {
             max-width: 900px;
             margin: 30px auto;
-            background-color: #2c3e50;
+            background-color: #2c3e50; /* 컨텐츠 배경 */
             border: 3px solid #34495e;
             border-radius: 20px;
-            padding: 30px; /* 내부 여백 축소 */
+            padding: 30px;
             box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
         }
 
@@ -66,6 +85,7 @@
             margin-top: 0;
         }
 
+        /* 알림 메시지 */
         .flash { 
             background: #e74c3c;
             border: 2px solid #c0392b;
@@ -79,10 +99,10 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.2);
         }
 
-        /* [모바일 최적화] */
+        /* [모바일 최적화] 화면이 좁을 때 글씨 크기 자동 조절 */
         @media (max-width: 768px) {
             body {
-                font-size: 14px; /* [수정] 모바일 글씨 더 축소 (15->14) */
+                font-size: 14px; /* 모바일 글씨 축소 */
             }
             .container {
                 margin: 10px;
@@ -100,11 +120,12 @@
     </style>
 </head>
 <body>
+
     {% if session.user_id %}
     <nav>
-        <a href="/lobby" class="nav-link">🏠 본부(로비)</a>
-        <a href="/dungeon" class="nav-link">⚡ 작전지역</a>
-        <a href="/collection" class="nav-link">🦸 카드도감</a>
+        <a href="/lobby" class="nav-link">🏠 본부</a>
+        <a href="/dungeon" class="nav-link">⚡ 작전</a>
+        <a href="/collection" class="nav-link">🦸 도감</a>
         <a href="/logout" class="nav-link" style="color: #c0392b;">🚪 퇴근</a>
     </nav>
     {% endif %}
@@ -115,7 +136,9 @@
                 <div class="flash">{{ messages[0] }}</div>
             {% endif %}
         {% endwith %}
+        
         {% block content %}{% endblock %}
     </div>
+
 </body>
 </html>
