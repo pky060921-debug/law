@@ -484,6 +484,13 @@ def exchange():
         return jsonify({'success': True, 'earned': earned, 'new_total': total})
     return jsonify({'success': False, 'msg': '교환 실패'})
 
+# ... (위쪽 코드는 그대로 두세요)
+
+# [추가] PWA 서비스 워커 연결 (이 부분을 추가하세요!)
+@app.route('/sw.js')
+def sw():
+    return app.send_static_file('sw.js')
+
 if __name__ == '__main__':
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
     app.run(host='0.0.0.0', port=10000)
