@@ -13,8 +13,7 @@
     {% if not quests %}
         <div style="text-align:center; padding:50px; color:#7f8c8d;">
             학습할 카드가 없습니다.<br>
-            {% if mode == 'acquire' %}(생성 구역에서 파일을 업로드하세요)
-            {% else %}(획득 구역에서 먼저 학습을 완료하세요){% endif %}
+            (이전 단계를 먼저 완료해주세요)
         </div>
     {% endif %}
 
@@ -26,7 +25,7 @@
     {% endfor %}
 
     {% for title, items in groups.items() %}
-    <details style="margin-bottom:15px; background:#34495e; border-radius:10px; overflow:hidden;">
+    <details style="margin-bottom:15px; background:#34495e; border-radius:10px; overflow:hidden;" open>
         <summary style="padding:15px; cursor:pointer; font-weight:bold; color:#f39c12; list-style:none;">
             📂 {{ title }} <span style="color:#bdc3c7; font-size:0.8em;">({{ items|length }}개)</span>
         </summary>
@@ -34,10 +33,20 @@
             {% for item in items %}
             <form method="POST" style="margin-bottom:5px;">
                 <input type="hidden" name="quest_name" value="{{ item.quest_name }}">
-                <button type="submit" style="width:100%; text-align:left; background:transparent; border:none; color:#ecf0f1; padding:10px; border-bottom:1px solid #444; cursor:pointer;">
-                    📄 {{ item.quest_name }}
+                <input type="hidden" name="quest_type" value="{{ item.type }}"> 
+                
+                <button type="submit" style="width:100%; text-align:left; background:transparent; border:none; color:#ecf0f1; padding:12px; border-bottom:1px solid #444; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+                    <span>
+                        {% if item.type == 'ABBREV' %}
+                            <span style="background:#9b59b6; color:white; padding:2px 6px; border-radius:4px; font-size:0.8rem; margin-right:5px;">약어</span>
+                        {% else %}
+                            <span style="background:#3498db; color:white; padding:2px 6px; border-radius:4px; font-size:0.8rem; margin-right:5px;">빈칸</span>
+                        {% endif %}
+                        {{ item.quest_name.split('-')[-1] }}
+                    </span>
+                    
                     {% if mode != 'acquire' %}
-                        <span style="float:right; color:#2ecc71;">Lv.{{ item.level }}</span>
+                        <span style="color:#2ecc71; font-weight:bold;">Lv.{{ item.level }}</span>
                     {% endif %}
                 </button>
             </form>
