@@ -50,8 +50,11 @@
 
                 {% for item in items %}
                 <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid #555;">
-                    <span style="color:#ecf0f1; font-size:0.95rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:10px;">
-                        📄 {{ item.quest_name.split('-')[-1] }}
+                    <span style="color:#ecf0f1; font-size:0.95rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:10px; flex:1;">
+                        {% if item.quest_name in my_completed %}
+                            <span style="color:#2ecc71; font-weight:bold;">[✅ 획득완료]</span>
+                        {% endif %}
+                        {{ item.quest_name.split('-')[-1] }}
                     </span>
                     <a href="/maker?quest_name={{ item.quest_name }}" style="text-decoration:none;">
                         <button style="background:#2ecc71; color:white; border:none; padding:5px 12px; border-radius:5px; cursor:pointer; font-size:0.9rem; white-space:nowrap;">
