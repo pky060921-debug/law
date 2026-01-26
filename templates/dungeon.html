@@ -1,150 +1,38 @@
 {% extends "layout.html" %}
-
 {% block content %}
-<style>
-    * { box-sizing: border-box; }
+<h1>🏭 빈칸 카드 생성소</h1>
+<p style="color:#aaa; text-align:center;">법령 텍스트 파일을 업로드하세요.</p>
 
-    /* 업로드 박스 */
-    .upload-box {
-        border: 2px dashed #5e4b3c;
-        background: rgba(0,0,0,0.2);
-        padding: 20px;
-        border-radius: 10px;
-        margin-top: 40px;
-        text-align: center;
-        width: 100%;
-    }
-    .upload-input {
-        background: #222; border: 1px solid #444; color: #ccc; 
-        padding: 12px; border-radius: 5px; margin: 5px; 
-        width: 60%; /* PC */
-    }
-    .btn-upload {
-        background: #2c1e12; color: #d4af37; border: 1px solid #d4af37;
-        padding: 12px 20px; cursor: pointer; font-family: 'Cinzel Decorative';
-    }
-
-    /* 퀘스트 목록 */
-    .quest-group-btn {
-        width: 100%; 
-        background: linear-gradient(to right, #1a0f2e, #2c1e12);
-        color: #d4af37; padding: 15px; margin-top: 15px;
-        border: 1px solid #5e4b3c; border-radius: 8px;
-        font-family: 'Cinzel Decorative'; font-size: 1.2rem;
-        cursor: pointer; display: flex; justify-content: space-between; align-items: center;
-        flex-wrap: wrap; /* 내용 많으면 줄바꿈 */
-    }
-    .quest-group-btn:active { transform: scale(0.98); }
-
-    .btn-delete {
-        background: #c0392b; color: white; border: none;
-        padding: 8px 12px; border-radius: 5px; font-size: 0.9rem; margin-left: 10px;
-        cursor: pointer;
-    }
-
-    .chapter-list {
-        display: none; background: rgba(0,0,0,0.3); border: 1px solid #444; border-top: none;
-        padding: 5px; margin-bottom: 20px; border-radius: 0 0 8px 8px;
-    }
-    .chapter-item {
-        width: 100%; text-align: left; background: transparent; color: #aaa;
-        border: none; padding: 15px; border-bottom: 1px solid #333; cursor: pointer;
-        font-size: 1rem;
-    }
-    .chapter-item:active { background: rgba(255,255,255,0.1); }
-
-    /* 📱 모바일 최적화 */
-    @media (max-width: 768px) {
-        .upload-input { width: 100%; margin-bottom: 10px; }
-        .btn-upload { width: 100%; }
-        .quest-group-btn { font-size: 1rem; padding: 12px; }
-    }
-</style>
-
-<h1>⚔️ 작전지역 (던전)</h1>
-<p style="text-align:center; color:#888;">훈련할 법령을 선택하십시오.</p>
-
-<div id="quest-container"></div>
-
-<div class="upload-box">
-    <h3 style="margin-top:0;">📜 신규 법령 등록</h3>
-    <form method="POST" enctype="multipart/form-data" style="display:flex; flex-direction:column; align-items:center;">
-        <input type="text" class="upload-input" name="new_q_name" placeholder="법령 제목 (예: 민법)" required>
-        <input type="file" class="upload-input" name="new_q_file" accept=".txt" required>
-        <button type="submit" class="btn-upload">등록하기</button>
+<div style="background:#34495e; padding:20px; border-radius:15px; margin-top:20px; text-align:center;">
+    <form method="POST" enctype="multipart/form-data">
+        <input type="text" name="new_q_name" placeholder="법령 제목 (예: 형법)" required 
+               style="padding:10px; width:80%; margin-bottom:10px; border-radius:5px; border:none;">
+        <br>
+        <input type="file" name="new_q_file" accept=".txt" required style="color:white;">
+        <br><br>
+        <button type="submit" style="background:#f39c12; border:none; padding:10px 30px; border-radius:5px; font-weight:bold; cursor:pointer;">
+            카드 생성하기
+        </button>
     </form>
 </div>
 
-<script>
-    const allQuests = {{ quests | tojson }};
-    const container = document.getElementById('quest-container');
-    const groups = {};
-    
-    allQuests.forEach(q => {
-        let parts = q.quest_name.split('-');
-        let title = parts[0]; 
-        let subTitle = q.quest_name; 
-        if (parts.length > 1) { subTitle = q.quest_name.substring(title.length + 1); }
-        if (!groups[title]) { groups[title] = []; }
-        groups[title].push({ fullName: q.quest_name, displayName: subTitle });
-    });
+<div style="margin-top:30px;">
+    <h3>📂 생성된 법령 목록</h3>
+    {% set groups = {} %}
+    {% for q in quests %}
+        {% set title = q.quest_name.split('-')[0] %}
+        {% if title not in groups %}{% set _ = groups.update({title: []}) %}{% endif %}
+        {% set _ = groups[title].append(q) %}
+    {% endfor %}
 
-    if (Object.keys(groups).length === 0) {
-        container.innerHTML = "<div style='text-align:center; padding:30px; color:#666;'>등록된 퀘스트가 없습니다.</div>";
-    }
-
-    for (const [title, chapters] of Object.entries(groups)) {
-        const groupBtn = document.createElement('div');
-        groupBtn.className = 'quest-group-btn';
-        
-        const titleSpan = document.createElement('span');
-        titleSpan.innerHTML = `📂 ${title} <span style="font-size:0.8em; color:#888;">(${chapters.length})</span>`;
-        
-        const deleteForm = document.createElement('form');
-        deleteForm.method = 'POST';
-        deleteForm.style.margin = '0';
-        deleteForm.onsubmit = (e) => {
-            if(!confirm(`'${title}' 법령을 삭제하시겠습니까?\n(복구 불가)`)) e.preventDefault();
-        };
-        const deleteInput = document.createElement('input');
-        deleteInput.type = 'hidden'; deleteInput.name = 'delete_group'; deleteInput.value = title;
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'btn-delete'; deleteBtn.innerHTML = '🗑️';
-        deleteBtn.onclick = (e) => { e.stopPropagation(); };
-
-        deleteForm.appendChild(deleteInput);
-        deleteForm.appendChild(deleteBtn);
-        
-        groupBtn.appendChild(titleSpan);
-        groupBtn.appendChild(deleteForm);
-        
-        const listDiv = document.createElement('div');
-        listDiv.className = 'chapter-list';
-
-        chapters.forEach(chap => {
-            const form = document.createElement('form');
-            form.method = 'POST';
-            
-            const input = document.createElement('input');
-            input.type = 'hidden'; input.name = 'quest_select'; input.value = chap.fullName;
-            const btn = document.createElement('button');
-            btn.className = 'chapter-item'; btn.type = 'submit';
-            
-            let viewName = chap.displayName;
-            if (/^\d+$/.test(viewName)) { viewName = `제 ${viewName} 조`; }
-            btn.innerText = `📄 ${viewName}`;
-
-            form.appendChild(input); form.appendChild(btn); listDiv.appendChild(form);
-        });
-
-        groupBtn.onclick = () => {
-            const isVisible = listDiv.style.display === 'block';
-            document.querySelectorAll('.chapter-list').forEach(el => el.style.display = 'none');
-            listDiv.style.display = isVisible ? 'none' : 'block';
-        };
-
-        container.appendChild(groupBtn);
-        container.appendChild(listDiv);
-    }
-</script>
+    {% for title, items in groups.items() %}
+    <div style="background:#2c3e50; padding:15px; margin-bottom:10px; border-radius:10px; display:flex; justify-content:space-between; align-items:center;">
+        <span style="color:#ecf0f1; font-weight:bold;">{{ title }} ({{ items|length }}개 조항)</span>
+        <form method="POST" style="margin:0;" onsubmit="return confirm('정말 삭제합니까?');">
+            <input type="hidden" name="delete_group" value="{{ title }}">
+            <button style="background:#c0392b; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer;">삭제</button>
+        </form>
+    </div>
+    {% endfor %}
+</div>
 {% endblock %}
