@@ -10,6 +10,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from authlib.integrations.flask_client import OAuth
 from werkzeug.middleware.proxy_fix import ProxyFix 
+import traceback # 에러 추적용
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'lord_of_blanks_key')
@@ -37,30 +38,48 @@ class GoogleSheetManager:
         self.collections_ws = None
         self.abbrev_ws = None
         self.USER_HEADERS = ["user_id", "password", "level", "xp", "title", "last_idx", "points", "nickname"]
+        self.QUEST_HEADERS = ["quest_name", "content", "creator", "date"]
+        self.COLLECTION_HEADERS = ["user_id", "card_text", "grade", "date", "quest_name", "level", "type"]
+        self.ABBREV_HEADERS = ["user_id", "term", "meaning", "date"]
         self.connect_db() 
 
     def connect_db(self):
         try:
             json_creds = os.environ.get('GCP_CREDENTIALS')
-            if not json_creds: return False
+            if not json_creds: 
+                print("❌ GCP_CREDENTIALS 환경변수 없음")
+                return False
+            
             creds_dict = json.loads(json_creds)
             scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
             self.client = gspread.authorize(creds)
             self.sheet = self.client.open("memory_game_db")
             
-            try: self.users_ws = self.sheet.worksheet("users")
-            except: self.users_ws = self.sheet.add_worksheet("users", 100, 10); self.users_ws.append_row(self.USER_HEADERS)
-            try: self.collections_ws = self.sheet.worksheet("collections")
-            except: self.collections_ws = self.sheet.add_worksheet("collections", 100, 10); self.collections_ws.append_row(["user_id", "card_text", "grade", "date", "quest_name", "level", "type"])
-            try: self.quests_ws = self.sheet.worksheet("quests")
-            except: self.quests_ws = self.sheet.add_worksheet("quests", 100, 5)
-            try: self.abbrev_ws = self.sheet.worksheet("abbreviations")
-            except: self.abbrev_ws = self.sheet.add_worksheet("abbreviations", 100, 10); self.abbrev_ws.append_row(["user_id", "term", "meaning", "date"])
+            # [핵심] 시트가 없거나 비어있으면 헤더(제목줄) 강제 주입
+            self.users_ws = self._get_or_create_sheet("users", self.USER_HEADERS)
+            self.collections_ws = self._get_or_create_sheet("collections", self.COLLECTION_HEADERS)
+            self.quests_ws = self._get_or_create_sheet("quests", self.QUEST_HEADERS)
+            self.abbrev_ws = self._get_or_create_sheet("abbreviations", self.ABBREV_HEADERS)
+
+            print("✅ DB 연결 및 헤더 확인 완료")
             return True
         except Exception as e:
-            print(f"DB Error: {e}")
+            print(f"❌ DB 연결 실패: {e}")
             return False
+
+    def _get_or_create_sheet(self, title, headers):
+        try:
+            ws = self.sheet.worksheet(title)
+            # 내용이 아예 없으면 헤더 추가
+            if not ws.get_all_values():
+                ws.append_row(headers)
+            return ws
+        except:
+            # 시트가 없으면 생성 후 헤더 추가
+            ws = self.sheet.add_worksheet(title, 100, 10)
+            ws.append_row(headers)
+            return ws
 
     def ensure_connection(self):
         try:
@@ -74,10 +93,11 @@ class GoogleSheetManager:
         try:
             self.ensure_connection()
             rows = worksheet.get_all_values()
-            if len(rows) < 2: return []
+            if len(rows) < 2: return [] # 헤더만 있거나 비어있으면 빈 리스트
             headers = rows[0]
             records = []
             for row in rows[1:]:
+                # 행 길이가 헤더보다 짧으면 빈카드로 채움 (인덱스 에러 방지)
                 padded = row + [""] * (len(headers) - len(row))
                 records.append(dict(zip(headers, padded)))
             return records
@@ -88,11 +108,12 @@ class GoogleSheetManager:
         try:
             records = self.get_safe_records(self.users_ws)
             for i, row in enumerate(records):
-                if str(row['user_id']) == str(user_id):
+                if str(row.get('user_id')) == str(user_id):
                     row['points'] = int(row.get('points') or 0)
                     row['level'] = int(row.get('level') or 1)
                     row['xp'] = int(row.get('xp') or 0)
                     if not row.get('nickname'): row['nickname'] = str(user_id).split('@')[0]
+                    # i는 데이터 인덱스(0부터). 실제 시트 행은 헤더(1) + 0-based(i) + 1 = i + 2
                     return row, i + 2
         except: pass
         return None, None
@@ -127,7 +148,7 @@ class GoogleSheetManager:
         except: return False
 
     def save_split_quests(self, title_prefix, file_obj, creator):
-        if not self.ensure_connection(): return False
+        if not self.ensure_connection(): return False, 0
         try:
             today = str(datetime.date.today())
             existing = [str(r.get('quest_name')) for r in self.get_safe_records(self.quests_ws)]
@@ -212,29 +233,31 @@ class GoogleSheetManager:
         if not self.ensure_connection(): return []
         try:
             col_records = self.get_safe_records(self.collections_ws)
-            return [r for r in col_records if str(r['user_id']) == str(user_id)]
+            return [r for r in col_records if str(r.get('user_id')) == str(user_id)]
         except: return []
 
     def get_available_quests(self, user_id, mode):
         if not self.ensure_connection(): return []
         try:
             all_quests = self.get_safe_records(self.quests_ws)
-            my_cards = self.get_safe_records(self.collections_ws)
-            my_cards = [c for c in my_cards if str(c['user_id']) == str(user_id)]
-            my_quest_names = [c['quest_name'] for c in my_cards if c['type'] == 'BLANK']
+            my_cards = self.get_my_progress(user_id)
+            my_quest_names = [c.get('quest_name') for c in my_cards if c.get('type') == 'BLANK']
             
-            if mode == 'acquire': return [q for q in all_quests if q['quest_name'] not in my_quest_names]
+            if mode == 'acquire': return [q for q in all_quests if q.get('quest_name') not in my_quest_names]
             elif mode == 'review': return my_cards 
             elif mode == 'abbrev': return [c for c in my_cards if int(c.get('level', 0)) >= 1]
         except: return []
 
     def process_result(self, user_id, row_idx, quest_name, content, mode):
         if not self.ensure_connection(): return 0, 0
+        
         try:
+            # 1. 유저 데이터 확인 (없으면 복구)
             user_data, fresh_row_idx = self.get_user_by_id(user_id)
             if not user_data:
                 self.register_social(user_id)
                 user_data, fresh_row_idx = self.get_user_by_id(user_id)
+            
             if not user_data: return 1, 0
 
             records = self.get_safe_records(self.collections_ws)
@@ -242,7 +265,7 @@ class GoogleSheetManager:
             found_idx = -1; current_level = 0
             
             for i, row in enumerate(records):
-                if str(row['user_id']) == str(user_id) and row['quest_name'] == quest_name and row['type'] == target_type:
+                if str(row.get('user_id')) == str(user_id) and row.get('quest_name') == quest_name and row.get('type') == target_type:
                     found_idx = i + 2; current_level = int(row.get('level') or 0); break
             
             xp_gain = 0
@@ -254,8 +277,8 @@ class GoogleSheetManager:
                 self.collections_ws.update_cell(found_idx, 6, current_level + 1)
                 xp_gain = 30 if mode == 'abbrev' else (20 + current_level * 5)
 
-            u_xp = int(user_data['xp'])
-            u_lv = int(user_data['level'])
+            u_xp = int(user_data.get('xp', 0))
+            u_lv = int(user_data.get('level', 1))
             new_xp = u_xp + xp_gain
             req = u_lv * 100
             if new_xp >= req: u_lv += 1; new_xp -= req
@@ -263,9 +286,10 @@ class GoogleSheetManager:
             self.users_ws.update_cell(fresh_row_idx, 3, u_lv)
             self.users_ws.update_cell(fresh_row_idx, 4, new_xp)
             return u_lv, new_xp
+            
         except Exception as e:
             print(f"Process Result Error: {e}")
-            return 1, 0
+            raise e # 에러를 상위로 던져서 화면에 표시
 
     def update_quest_content(self, quest_name, new_content):
         if not self.ensure_connection(): return False
@@ -277,7 +301,7 @@ class GoogleSheetManager:
     def get_abbreviations(self, user_id):
         if not self.ensure_connection(): return []
         records = self.get_safe_records(self.abbrev_ws)
-        return [r for r in records if str(r['user_id']) == str(user_id)]
+        return [r for r in records if str(r.get('user_id')) == str(user_id)]
 
     def add_abbreviation(self, user_id, term, meaning):
         if not self.ensure_connection(): return False
@@ -288,7 +312,7 @@ class GoogleSheetManager:
         if not self.ensure_connection(): return False
         records = self.get_safe_records(self.abbrev_ws)
         for i, r in enumerate(records):
-            if str(r['user_id']) == str(user_id) and r['term'] == term:
+            if str(r.get('user_id')) == str(user_id) and r.get('term') == term:
                 self.abbrev_ws.delete_rows(i + 2); return True
         return False
 
@@ -338,7 +362,6 @@ def zone_generate():
             else: flash("생성 실패: 파일 형식을 확인해주세요.")
     
     quests = gm.get_quest_list()
-    # [수정됨] 정렬 제거 (파일 순서 유지) & 완료 정보 전달
     my_progress = gm.get_my_progress(session['user_id'])
     my_completed = [c['quest_name'] for c in my_progress if c['type'] == 'BLANK']
     return render_template('zone_generate.html', quests=quests, my_completed=my_completed)
@@ -374,7 +397,6 @@ def zone_acquire():
             ACTIVE_GAMES[session['user_id']] = { 'mode': 'acquire', 'quest_name': q_name, 'content': quest['content'] }
             return redirect(url_for('play_game'))
     quests = gm.get_available_quests(session['user_id'], 'acquire')
-    # [수정됨] 정렬 제거
     return render_template('zone_list.html', title="획득 구역", quests=quests, mode='acquire')
 
 @app.route('/zone/review', methods=['GET', 'POST'])
@@ -390,7 +412,6 @@ def zone_review():
             ACTIVE_GAMES[session['user_id']] = { 'mode': mode, 'quest_name': q_name, 'content': card['card_text'] }
             return redirect(url_for('play_game'))
     cards = gm.get_available_quests(session['user_id'], 'review')
-    # [수정됨] 정렬 제거
     return render_template('zone_list.html', title="복습 구역", quests=cards, mode='review')
 
 @app.route('/zone/abbrev', methods=['GET', 'POST'])
@@ -404,12 +425,13 @@ def zone_abbrev():
             ACTIVE_GAMES[session['user_id']] = { 'mode': 'abbrev', 'quest_name': q_name, 'content': card['card_text'] }
             return redirect(url_for('play_game'))
     cards = gm.get_available_quests(session['user_id'], 'abbrev')
-    # [수정됨] 정렬 제거
     return render_template('zone_list.html', title="약어 훈련소", quests=cards, mode='abbrev')
 
 @app.route('/play', methods=['GET', 'POST'])
 def play_game():
     if 'user_id' not in session: return redirect(url_for('index'))
+    
+    # [에러 추적] 게임 데이터가 없는 경우 로비로
     game = ACTIVE_GAMES.get(session['user_id'])
     if not game: return redirect(url_for('lobby'))
 
@@ -434,13 +456,21 @@ def play_game():
         return render_template('play.html', parts=parts, targets=targets, mode=game['mode'], title=game['quest_name'])
 
     elif request.method == 'POST':
-        clean = game['content']
-        if game['mode'] != 'abbrev': clean = re.sub(r'\{([^}]+)\}', r'\1', game['content'])
-        lv, xp = gm.process_result(session['user_id'], session.get('user_row_idx'), game['quest_name'], clean, game['mode'])
-        session['level'] = lv; session['xp'] = xp
-        flash(f"학습 완료! (현재 Lv.{lv})")
-        return_zone = 'review' if game['mode'] == 'review' else ('abbrev' if game['mode'] == 'abbrev' else 'acquire')
-        return redirect(url_for(f"zone_{return_zone}"))
+        # [핵심] 500 에러 추적을 위한 try-except 블록
+        try:
+            clean = game['content']
+            if game['mode'] != 'abbrev': clean = re.sub(r'\{([^}]+)\}', r'\1', game['content'])
+            
+            lv, xp = gm.process_result(session['user_id'], session.get('user_row_idx'), game['quest_name'], clean, game['mode'])
+            
+            session['level'] = lv; session['xp'] = xp
+            flash(f"학습 완료! (현재 Lv.{lv})")
+            return_zone = 'review' if game['mode'] == 'review' else ('abbrev' if game['mode'] == 'abbrev' else 'acquire')
+            return redirect(url_for(f"zone_{return_zone}"))
+        except Exception as e:
+            # 에러 발생 시, 500 페이 대신 에러 내용을 화면에 출력
+            error_msg = traceback.format_exc()
+            return f"<h3>⚠️ 오류가 발생했습니다.</h3><pre>{error_msg}</pre><br><a href='/lobby'>로비로 돌아가기</a>"
 
 @app.route('/update_nickname', methods=['POST'])
 def update_nickname():
