@@ -2,67 +2,41 @@
 
 {% block content %}
 <style>
-    /* [반응형 게임 보드] */
     .play-area {
-        background: #34495e;
-        padding: 30px;
-        border-radius: 15px;
-        border: 2px solid #2c3e50;
-        
-        /* PC 기본 스타일 */
-        line-height: 2.5; 
-        font-size: 1.3rem; 
-        text-align: left;
-        word-break: keep-all;
-        color: #ecf0f1;
+        background: #34495e; padding: 20px; border-radius: 15px; border: 2px solid #2c3e50;
+        line-height: 1.8; font-size: 1.1rem; letter-spacing: -0.5px; word-spacing: -1px;
+        text-align: left; word-break: keep-all; color: #ecf0f1;
     }
-
-    .edit-token {
-        cursor: pointer; padding: 2px 5px; border-radius: 4px; border: 1px solid transparent; display: inline-block;
-    }
-    .edit-token:hover { background: rgba(243, 156, 18, 0.2); border-color: #f39c12; }
+    .edit-token { cursor: pointer; padding: 1px 3px; border-radius: 4px; display: inline-block; }
+    .edit-token:hover { background: rgba(243, 156, 18, 0.2); border: 1px solid #f39c12; }
     .edit-token.selected { background: #e74c3c; color: #fff; font-weight: bold; }
-    
     .static-text { color: #bdc3c7; font-weight: normal; }
-
-    /* 반응형 입력창 */
     .quiz-input {
         background: #2c3e50; border: none; border-bottom: 2px solid #7f8c8d; color: #f1c40f; text-align: center;
-        font-size: 1.3rem; font-weight: bold; padding: 0; margin: 0 2px;
-        font-family: 'Jua', sans-serif; transition: 0.2s; 
-        min-width: 30px; max-width: 100%;
+        font-size: 1.1rem; font-weight: bold; padding: 0; margin: 0 2px; height: 1.4rem;
+        font-family: 'Jua', sans-serif; transition: 0.2s; min-width: 30px; max-width: 100%;
     }
     .quiz-input:focus { outline: none; border-bottom-color: #f1c40f; background: #233140; }
     .quiz-input.correct { border-bottom-color: #2ecc71; color: #2ecc71; background: transparent; }
     .quiz-input.error { border-bottom-color: #e74c3c; color: #e74c3c; animation: shake 0.3s; }
-
+    .answer-hint {
+        display: none; position: absolute; top: -30px; left: 50%; transform: translateX(-50%);
+        background: #e74c3c; color: white; padding: 2px 6px; border-radius: 6px; 
+        font-size: 0.8rem; white-space: nowrap; z-index: 100; border: 1px solid white;
+    }
+    .input-wrapper:hover .answer-hint, .input-wrapper.show-hint .answer-hint { display: block; }
+    .input-wrapper { position: relative; display: inline-block; }
     .btn-action {
-        width: 100%; padding: 15px; font-size: 1.2rem; font-family: 'Black Han Sans';
+        width: 100%; padding: 12px; font-size: 1.2rem; font-family: 'Black Han Sans';
         border: none; border-radius: 10px; cursor: pointer; margin-top: 20px;
     }
     .btn-blue { background: #3498db; color: white; }
     .btn-next { background: #27ae60; color: white; margin-top: 10px; display: none; }
-
-    /* 📱 태블릿/모바일 최적화 */
-    @media (max-width: 1024px) {
-        .play-area {
-            font-size: 1.1rem; /* 글씨 줄임 */
-            line-height: 2.0;  /* 줄간격 좁힘 */
-            padding: 20px;
-        }
-        .quiz-input { font-size: 1.1rem; }
+    .btn-edit-text {
+        background: transparent; color: #95a5a6; border: 1px solid #95a5a6;
+        padding: 5px 10px; border-radius: 5px; font-size: 0.9rem; cursor: pointer; margin-left: 10px;
     }
-
-    @media (max-width: 768px) {
-        .play-area {
-            font-size: 1rem;
-            line-height: 1.8;
-            padding: 15px;
-        }
-        .quiz-input { font-size: 1rem; max-width: 100px; }
-    }
-    
-    @keyframes shake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-3px);} 75%{transform:translateX(3px);} }
+    @media (max-width: 768px) { .play-area { font-size: 1rem; line-height: 1.6; } }
 </style>
 
 <div style="text-align: center;">
@@ -76,16 +50,22 @@
     {% else %}
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
             <a href="/dungeon" style="text-decoration:none; color:#bdc3c7; font-size:1rem;">🔙 뒤로</a>
-            <div style="font-size:1.2rem; color:#f1c40f; font-weight:bold;">EXP: {{ session['xp'] }}</div>
+            <div>
+                <a href="/dungeon/edit_text" class="btn-edit-text">✏️ 내용 수정</a>
+            </div>
         </div>
+        <div style="text-align:right; margin-bottom:5px; color:#f1c40f; font-weight:bold;">EXP: {{ session['xp'] }}</div>
 
         <div class="play-area" id="game-board">
             {% for part in parts %}
                 {% if part.type == 'text' %}
                     <span class="static-text">{{ part.val | replace("①", "<br>①") | replace("②", "<br>②") | replace("③", "<br>③") | replace("④", "<br>④") | replace("⑤", "<br>⑤") | safe }}</span>
                 {% else %}
-                    <input type="text" class="quiz-input" data-answer="{{ targets[part.id] }}" 
-                           style="width:{{ targets[part.id]|length * 15 + 10 }}px;" autocomplete="off">
+                    <span class="input-wrapper">
+                        <span class="answer-hint">{{ targets[part.id] }}</span>
+                        <input type="text" class="quiz-input" data-answer="{{ targets[part.id] }}" 
+                               style="width:{{ targets[part.id]|length * 15 + 10 }}px;" autocomplete="off">
+                    </span>
                 {% endif %}
             {% endfor %}
         </div>
@@ -94,10 +74,7 @@
             <input type="hidden" name="penalty_count" id="penalty_count" value="0">
         </form>
         
-        <button id="submit-btn" class="btn-action" onclick="checkFinal()" disabled style="background:#7f8c8d; cursor:not-allowed;">
-            빈칸을 모두 채워주세요
-        </button>
-
+        <button id="submit-btn" class="btn-action" onclick="checkFinal()" disabled style="background:#7f8c8d; cursor:not-allowed;">빈칸을 모두 채워주세요</button>
         {% if next_quest %}
         <form action="/dungeon" method="POST" style="margin:0;">
             <input type="hidden" name="quest_select" value="{{ next_quest }}">
@@ -132,8 +109,7 @@
                             html += `<span class="edit-token" onclick="toggleToken(${idx}, this)">${core}</span>`;
                             if (suffix) { tokenList.push({ text: suffix, type: 'static' }); html += `<span class="static-text">${suffix}</span>`; }
                         } else {
-                            tokenList.push({ text: token, type: 'static' });
-                            html += `<span class="static-text">${token}</span>`;
+                            tokenList.push({ text: token, type: 'static' }); html += `<span class="static-text">${token}</span>`;
                         }
                     });
                     tokenList.push({ text: ' ', type: 'space' }); html += ' '; 
@@ -143,8 +119,7 @@
             editBoard.innerHTML = html;
         }
         function toggleToken(idx, el) {
-            const token = tokenList[idx]; token.selected = !token.selected;
-            el.classList.toggle('selected');
+            const token = tokenList[idx]; token.selected = !token.selected; el.classList.toggle('selected');
         }
         function submitEdit() {
             let result = "";
@@ -158,38 +133,26 @@
         const submitBtn = document.getElementById('submit-btn');
         const nextBtn = document.getElementById('next-btn');
         let penaltyCount = 0;
-
         inputs.forEach(input => {
             input.addEventListener('change', function() { validate(this); checkAll(); });
             input.addEventListener('keydown', function(e) { if (e.key === 'Enter') { this.blur(); focusNext(this); }});
         });
-
         function validate(input) {
-            const val = input.value.trim();
-            const ans = input.dataset.answer;
+            const val = input.value.trim(); const ans = input.dataset.answer;
             if (input.classList.contains('correct')) return;
-            if (val === ans) {
-                input.classList.remove('error'); input.classList.add('correct'); input.readOnly = true;
-            } else if (val !== '') {
-                input.classList.add('error'); penaltyCount++;
-                document.getElementById('penalty_count').value = penaltyCount;
-            }
+            if (val === ans) { input.classList.remove('error'); input.classList.add('correct'); input.readOnly = true; } 
+            else if (val !== '') { input.classList.add('error'); penaltyCount++; document.getElementById('penalty_count').value = penaltyCount; }
         }
-
         function checkAll() {
             if (Array.from(inputs).every(i => i.classList.contains('correct'))) {
-                submitBtn.disabled = false;
-                submitBtn.style.background = "#2ecc71";
-                submitBtn.style.color = "white";
-                submitBtn.style.cursor = "pointer";
+                submitBtn.disabled = false; submitBtn.style.background = "#2ecc71"; submitBtn.style.color = "white"; submitBtn.style.cursor = "pointer";
                 submitBtn.innerText = "🎉 미션 성공! 보상 획득";
                 if (nextBtn) nextBtn.style.display = "block";
             }
         }
         function checkFinal() { document.getElementById('game-form').submit(); }
         function focusNext(curr) {
-            const arr = Array.from(inputs);
-            const idx = arr.indexOf(curr);
+            const arr = Array.from(inputs); const idx = arr.indexOf(curr);
             for(let i=idx+1; i<arr.length; i++) if(!arr[i].readOnly) { arr[i].focus(); break; }
         }
     {% endif %}
