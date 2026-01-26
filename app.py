@@ -356,6 +356,7 @@ def zone_generate():
             else: flash("생성 실패: 파일 형식을 확인해주세요.")
     
     quests = gm.get_quest_list()
+    # 정렬 없이 파일 순서 그대로 유지
     my_progress = gm.get_my_progress(session['user_id'])
     my_completed = [c.get('quest_name') for c in my_progress if c.get('type') == 'BLANK']
     return render_template('zone_generate.html', quests=quests, my_completed=my_completed)
@@ -391,6 +392,7 @@ def zone_acquire():
             ACTIVE_GAMES[session['user_id']] = { 'mode': 'acquire', 'quest_name': q_name, 'content': quest['content'] }
             return redirect(url_for('play_game'))
     quests = gm.get_available_quests(session['user_id'], 'acquire')
+    # 정렬 제거
     return render_template('zone_list.html', title="획득 구역", quests=quests, mode='acquire')
 
 @app.route('/zone/review', methods=['GET', 'POST'])
@@ -424,10 +426,12 @@ def zone_abbrev():
 @app.route('/play', methods=['GET', 'POST'])
 def play_game():
     if 'user_id' not in session: return redirect(url_for('index'))
+    
     game = ACTIVE_GAMES.get(session['user_id'])
     if not game: return redirect(url_for('lobby'))
 
     if request.method == 'GET':
+        # [수정] import re 제거 (전역 re 사용)
         content = game['content']
         parts = []
         targets = []
@@ -449,7 +453,6 @@ def play_game():
     elif request.method == 'POST':
         try:
             clean = game['content']
-            # [수정] UnboundLocalError 방지를 위해 import 제거하고 전역 re 사용
             if game['mode'] != 'abbrev': clean = re.sub(r'\{([^}]+)\}', r'\1', game['content'])
             
             lv, xp = gm.process_result(session['user_id'], session.get('user_row_idx'), game['quest_name'], clean, game['mode'])
