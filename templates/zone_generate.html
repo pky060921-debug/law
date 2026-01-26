@@ -2,37 +2,26 @@
 
 {% block content %}
 <h1>🏭 빈칸 카드 생성소</h1>
-<p style="color:#aaa; text-align:center;">법령 텍스트 파일을 업로드하거나 직접 입력하세요.</p>
+<p style="color:#aaa; text-align:center;">업로드한 법령을 수정하거나 빈칸을 만드세요.</p>
 
-<div style="display:flex; gap:15px; flex-wrap:wrap; justify-content:center; margin-bottom:20px;">
-    <div style="flex:1; min-width:300px; background:#34495e; padding:30px; border-radius:15px; text-align:center; border: 1px solid #7f8c8d;">
-        <form method="POST" enctype="multipart/form-data">
-            <h3 style="margin-top:0; color:#f39c12;">📂 파일로 만들기</h3>
-            <input type="text" name="new_q_name" placeholder="법령 제목 (예: 형법)" required 
-                   style="padding:12px; width:80%; margin-bottom:15px; border-radius:5px; border:none;">
-            <br>
-            <input type="file" name="new_q_file" accept=".txt" required style="color:white; margin-bottom:15px;">
-            <br>
-            <button type="submit" style="background:#f39c12; border:none; padding:10px 30px; border-radius:30px; font-weight:bold; cursor:pointer;">
-                생성하기
-            </button>
-        </form>
-    </div>
-
-    <div style="flex:1; min-width:300px; background:#34495e; padding:30px; border-radius:15px; text-align:center; border: 1px solid #7f8c8d; display:flex; flex-direction:column; justify-content:center; align-items:center;">
-        <h3 style="margin-top:0; color:#2ecc71;">✏️ 직접 만들기</h3>
-        <p style="color:#bdc3c7; font-size:0.9rem;">원하는 문장을 붙여넣고<br>클릭해서 빈칸을 뚫으세요!</p>
-        <a href="/maker" style="background:#2ecc71; color:white; text-decoration:none; padding:12px 30px; border-radius:30px; font-weight:bold; display:inline-block; margin-top:10px;">
-            제작기 열기
-        </a>
-    </div>
+<div style="background:#34495e; padding:20px; border-radius:15px; margin-top:20px; text-align:center; border: 1px solid #7f8c8d;">
+    <form method="POST" enctype="multipart/form-data" style="display:flex; flex-direction:column; align-items:center;">
+        <h3 style="margin-top:0; color:#f39c12;">📂 새 파일 업로드</h3>
+        <input type="text" name="new_q_name" placeholder="법령 제목 (예: 형법)" required 
+               style="padding:10px; width:80%; max-width:400px; margin-bottom:10px; border-radius:5px; border:none;">
+        <input type="file" name="new_q_file" accept=".txt" required style="color:white; margin-bottom:10px;">
+        <button type="submit" style="background:#f39c12; border:none; padding:10px 30px; border-radius:5px; font-weight:bold; cursor:pointer;">
+            생성하기
+        </button>
+    </form>
 </div>
 
 <div style="margin-top:40px;">
-    <h3>📂 현재 등록된 법령 목록</h3>
+    <h3>📂 등록된 법령 목록</h3>
+    
     {% if not quests %}
         <div style="text-align:center; padding:40px; color:#95a5a6; border: 2px dashed #555; border-radius: 10px;">
-            <p>아직 등록된 카드가 없습니다.</p>
+            <p>등록된 카드가 없습니다.</p>
         </div>
     {% else %}
         {% set groups = {} %}
@@ -43,16 +32,36 @@
         {% endfor %}
 
         {% for title, items in groups.items() %}
-        <div style="background:#2c3e50; padding:15px; margin-bottom:10px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; border:1px solid #444;">
-            <div>
-                <span style="color:#ecf0f1; font-weight:bold; font-size:1.1rem;">{{ title }}</span>
-                <span style="color:#bdc3c7; font-size:0.9rem; margin-left:10px;">(총 {{ items|length }}개)</span>
+        <details style="margin-bottom:15px; background:#2c3e50; border-radius:10px; border:1px solid #444; overflow:hidden;">
+            <summary style="padding:15px; cursor:pointer; font-weight:bold; color:#ecf0f1; list-style:none; display:flex; justify-content:space-between; align-items:center;">
+                <span>📂 {{ title }} <span style="color:#bdc3c7; font-size:0.8em;">({{ items|length }}개)</span></span>
+                <span style="font-size:0.8em; color:#f39c12;">▼ 펼치기</span>
+            </summary>
+            
+            <div style="background:#34495e; padding:10px; border-top:1px solid #444;">
+                <div style="text-align:right; margin-bottom:10px;">
+                    <form method="POST" style="display:inline;" onsubmit="return confirm('정말 \'' + '{{ title }}' + '\' 전체를 삭제하시겠습니까?');">
+                        <input type="hidden" name="delete_group" value="{{ title }}">
+                        <button style="background:#c0392b; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer; font-size:0.9rem;">
+                            그룹 전체 삭제 🗑️
+                        </button>
+                    </form>
+                </div>
+
+                {% for item in items %}
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid #555;">
+                    <span style="color:#ecf0f1; font-size:0.95rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:10px;">
+                        📄 {{ item.quest_name }}
+                    </span>
+                    <a href="/maker?quest_name={{ item.quest_name }}" style="text-decoration:none;">
+                        <button style="background:#2ecc71; color:white; border:none; padding:5px 12px; border-radius:5px; cursor:pointer; font-size:0.9rem; white-space:nowrap;">
+                            ✏️ 수정/빈칸
+                        </button>
+                    </a>
+                </div>
+                {% endfor %}
             </div>
-            <form method="POST" style="margin:0;" onsubmit="return confirm('삭제하시겠습니까?');">
-                <input type="hidden" name="delete_group" value="{{ title }}">
-                <button style="background:#c0392b; color:white; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">삭제</button>
-            </form>
-        </div>
+        </details>
         {% endfor %}
     {% endif %}
 </div>
