@@ -105,23 +105,6 @@ class GoogleSheetManager:
             except: return False
         return False
 
-    # [수정] 수동 제작 카드 저장 기능
-    def save_manual_quest(self, title, content, creator):
-        if not self.check_connection(): return False
-        try:
-            today = str(datetime.date.today())
-            # 중복 체크
-            existing = [str(r.get('quest_name')) for r in self.quests_ws.get_all_records()]
-            final_title = title
-            dup_cnt = 0
-            while final_title in existing:
-                dup_cnt += 1
-                final_title = f"{title}_{dup_cnt}"
-            
-            self.quests_ws.append_row([final_title, content, creator, today])
-            return True
-        except: return False
-
     def save_split_quests(self, title_prefix, file_obj, creator):
         if not self.check_connection(): return False, 0
         try:
@@ -312,32 +295,37 @@ def zone_generate():
     quests.sort(key=natural_sort_key)
     return render_template('zone_generate.html', quests=quests)
 
-# [신규] 제작기(Maker) 라우트
+# [수정됨] 편집 모드 라우트
 @app.route('/maker', methods=['GET', 'POST'])
 def maker():
     if 'user_id' not in session: return redirect(url_for('index'))
     
-    # 1. 초기 화면 (텍스트 입력)
+    # 1. 편집 화면 불러오기 (GET)
     if request.method == 'GET':
-        return render_template('maker.html', step='input')
-    
-    # 2. 제작 모드 (POST로 텍스트 받음)
-    elif request.method == 'POST':
-        # 저장 요청인 경우
-        if 'final_content' in request.form:
-            title = request.form['title']
-            content = request.form['final_content']
-            if gm.save_manual_quest(title, content, session['user_id']):
-                flash("카드가 생성되었습니다! 획득 구역에서 확인하세요.")
-                return redirect(url_for('zone_generate'))
-            else:
-                flash("저장 실패")
-                return redirect(url_for('maker'))
+        q_name = request.args.get('quest_name')
+        if not q_name: return redirect(url_for('zone_generate'))
         
-        # 텍스트 입력 후 '제작 시작' 누른 경우
-        raw_text = request.form.get('raw_text', '')
-        input_title = request.form.get('title', '직접 만든 카드')
-        return render_template('maker.html', step='edit', raw_text=raw_text, title=input_title)
+        # DB에서 해당 퀘스트의 내용을 찾아옴
+        quests = gm.get_quest_list()
+        quest = next((q for q in quests if q['quest_name'] == q_name), None)
+        
+        if not quest: return redirect(url_for('zone_generate'))
+        
+        # 기존 내용에서 {빈칸} 문법을 제거하고 순수 텍스트로 복원할지, 아니면 그대로 보여줄지
+        # 여기서는 그대로 보여주어 기존 빈칸도 수정 가능하게 함
+        return render_template('maker.html', raw_text=quest['content'], title=q_name)
+    
+    # 2. 저장하기 (POST)
+    elif request.method == 'POST':
+        q_name = request.form['title']
+        content = request.form['final_content']
+        
+        if gm.update_quest_content(q_name, content):
+            flash("수정되었습니다!")
+            return redirect(url_for('zone_generate'))
+        else:
+            flash("저장 실패")
+            return redirect(url_for('maker', quest_name=q_name))
 
 @app.route('/zone/acquire', methods=['GET', 'POST'])
 def zone_acquire():
