@@ -52,7 +52,6 @@ class GoogleSheetManager:
             self.client = gspread.authorize(creds)
             self.sheet = self.client.open("memory_game_db")
             
-            # 시트 연결 또는 생성
             try: self.users_ws = self.sheet.worksheet("users")
             except: 
                 self.users_ws = self.sheet.add_worksheet("users", 100, 10)
@@ -115,7 +114,9 @@ class GoogleSheetManager:
     def register_social(self, user_id):
         if not self.ensure_connection(): return False
         try:
+            # 중복 체크
             if self.get_user_by_id(user_id)[0]: return True
+            
             nick = user_id.split('@')[0]
             self.users_ws.append_row([user_id, "SOCIAL", 1, 0, "빈칸 견습생", 0, 0, nick])
             return True
@@ -142,7 +143,7 @@ class GoogleSheetManager:
         except: return False
 
     def save_split_quests(self, title_prefix, file_obj, creator):
-        if not self.ensure_connection(): return False, 0
+        if not self.ensure_connection(): return False
         try:
             today = str(datetime.date.today())
             existing = [str(r.get('quest_name')) for r in self.get_safe_records(self.quests_ws)]
@@ -243,11 +244,24 @@ class GoogleSheetManager:
             elif mode == 'abbrev': return [c for c in my_cards if int(c.get('level', 0)) >= 1]
         except: return []
 
-    # [중요] 저장 기능 에러 수정
-    def process_result(self, user_id, session_row_idx, quest_name, content, mode):
+    # [핵심 수정] 저장 전 유저 자동 복구 (500 에러 방지)
+    def process_result(self, user_id, row_idx, quest_name, content, mode):
         if not self.ensure_connection(): return 0, 0
         
         try:
+            # 1. 유저 확인 및 자동 복구 (시트 초기화 대응)
+            user_data, fresh_row_idx = self.get_user_by_id(user_id)
+            if not user_data:
+                print(f"⚠️ 유저({user_id})가 DB에 없음. 자동 복구 시도.")
+                self.register_social(user_id)
+                user_data, fresh_row_idx = self.get_user_by_id(user_id)
+                
+            if not user_data:
+                # 그래도 없으면 실패 처리 (하지만 서버는 안 죽게)
+                print("❌ 유저 복구 실패")
+                return 1, 0
+
+            # 2. 카드 획득/업데이트 로직
             records = self.get_safe_records(self.collections_ws)
             target_type = 'ABBREV' if mode == 'abbrev' else 'BLANK'
             found_idx = -1; current_level = 0
@@ -265,24 +279,21 @@ class GoogleSheetManager:
                 self.collections_ws.update_cell(found_idx, 6, current_level + 1)
                 xp_gain = 30 if mode == 'abbrev' else (20 + current_level * 5)
 
-            # [핵심 수정] 저장 전 유저 위치를 다시 찾음 (세션 정보 맹신 금지)
-            user_data, fresh_row_idx = self.get_user_by_id(user_id)
+            # 3. 유저 경험치 업데이트
+            u_xp = int(user_data['xp'])
+            u_lv = int(user_data['level'])
+            new_xp = u_xp + xp_gain
+            req = u_lv * 100
+            if new_xp >= req: u_lv += 1; new_xp -= req
             
-            if user_data and fresh_row_idx:
-                u_xp = int(user_data['xp'])
-                u_lv = int(user_data['level'])
-                new_xp = u_xp + xp_gain
-                req = u_lv * 100
-                if new_xp >= req: u_lv += 1; new_xp -= req
-                
-                self.users_ws.update_cell(fresh_row_idx, 3, u_lv)
-                self.users_ws.update_cell(fresh_row_idx, 4, new_xp)
-                return u_lv, new_xp
-            return 1, 0 # 유저 정보 못찾으면 레벨1 반환
+            self.users_ws.update_cell(fresh_row_idx, 3, u_lv)
+            self.users_ws.update_cell(fresh_row_idx, 4, new_xp)
+            return u_lv, new_xp
             
         except Exception as e:
             print(f"Process Result Error: {e}")
-            return session.get('level', 1), session.get('xp', 0)
+            # 에러 나도 튕기지 않고 레벨 1 반환
+            return 1, 0
 
     def update_quest_content(self, quest_name, new_content):
         if not self.ensure_connection(): return False
@@ -311,9 +322,19 @@ class GoogleSheetManager:
 
 gm = GoogleSheetManager()
 
-def natural_sort_key(q):
+def custom_sort_key(q):
     name = str(q.get('quest_name', ''))
-    return [int(t) if t.isdigit() else t for t in re.split(r'(\d+)', name)]
+    if '-' in name: clean_name = name.split('-')[-1].strip()
+    else: clean_name = name
+    
+    rank = 99
+    if clean_name.startswith("제"): rank = 1
+    elif clean_name.startswith("령"): rank = 2
+    elif clean_name.startswith("규") or clean_name.startswith("칙"): rank = 3
+    
+    numbers = [int(n) for n in re.findall(r'\d+', clean_name)]
+    if not numbers: numbers = [0]
+    return (rank, numbers, clean_name)
 
 @app.route('/')
 def index():
@@ -358,7 +379,7 @@ def zone_generate():
             if ok: flash(f"{cnt}개 생성 완료!")
             else: flash("생성 실패: 파일 형식을 확인해주세요.")
     quests = gm.get_quest_list()
-    quests.sort(key=natural_sort_key)
+    quests.sort(key=custom_sort_key)
     return render_template('zone_generate.html', quests=quests)
 
 @app.route('/maker', methods=['GET', 'POST'])
@@ -392,7 +413,7 @@ def zone_acquire():
             ACTIVE_GAMES[session['user_id']] = { 'mode': 'acquire', 'quest_name': q_name, 'content': quest['content'] }
             return redirect(url_for('play_game'))
     quests = gm.get_available_quests(session['user_id'], 'acquire')
-    quests.sort(key=natural_sort_key)
+    quests.sort(key=custom_sort_key)
     return render_template('zone_list.html', title="획득 구역", quests=quests, mode='acquire')
 
 @app.route('/zone/review', methods=['GET', 'POST'])
@@ -408,7 +429,7 @@ def zone_review():
             ACTIVE_GAMES[session['user_id']] = { 'mode': mode, 'quest_name': q_name, 'content': card['card_text'] }
             return redirect(url_for('play_game'))
     cards = gm.get_available_quests(session['user_id'], 'review')
-    cards.sort(key=natural_sort_key)
+    cards.sort(key=custom_sort_key)
     return render_template('zone_list.html', title="복습 구역", quests=cards, mode='review')
 
 @app.route('/zone/abbrev', methods=['GET', 'POST'])
@@ -422,7 +443,7 @@ def zone_abbrev():
             ACTIVE_GAMES[session['user_id']] = { 'mode': 'abbrev', 'quest_name': q_name, 'content': card['card_text'] }
             return redirect(url_for('play_game'))
     cards = gm.get_available_quests(session['user_id'], 'abbrev')
-    cards.sort(key=natural_sort_key)
+    cards.sort(key=custom_sort_key)
     return render_template('zone_list.html', title="약어 훈련소", quests=cards, mode='abbrev')
 
 @app.route('/play', methods=['GET', 'POST'])
@@ -455,7 +476,7 @@ def play_game():
     elif request.method == 'POST':
         clean = game['content']
         if game['mode'] != 'abbrev': clean = re.sub(r'\{([^}]+)\}', r'\1', game['content'])
-        lv, xp = gm.process_result(session['user_id'], session['user_row_idx'], game['quest_name'], clean, game['mode'])
+        lv, xp = gm.process_result(session['user_id'], session.get('user_row_idx'), game['quest_name'], clean, game['mode'])
         session['level'] = lv; session['xp'] = xp
         flash(f"학습 완료! (현재 Lv.{lv})")
         return_zone = 'review' if game['mode'] == 'review' else ('abbrev' if game['mode'] == 'abbrev' else 'acquire')
