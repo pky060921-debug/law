@@ -4,56 +4,61 @@
 <style>
     * { box-sizing: border-box; }
 
+    /* 업로드 박스 */
     .upload-box {
         border: 2px dashed #5e4b3c;
         background: rgba(0,0,0,0.2);
         padding: 20px;
         border-radius: 10px;
-        margin-top: 50px;
+        margin-top: 40px;
         text-align: center;
         width: 100%;
-        overflow: hidden; 
     }
     .upload-input {
-        background: #222; border: 1px solid #444; color: #ccc; padding: 10px;
-        border-radius: 5px; margin: 5px; width: 90%; max-width: 300px;
+        background: #222; border: 1px solid #444; color: #ccc; 
+        padding: 12px; border-radius: 5px; margin: 5px; 
+        width: 60%; /* PC */
     }
     .btn-upload {
         background: #2c1e12; color: #d4af37; border: 1px solid #d4af37;
-        padding: 10px 20px; cursor: pointer; font-family: 'Cinzel Decorative'; margin-top: 10px;
+        padding: 12px 20px; cursor: pointer; font-family: 'Cinzel Decorative';
     }
-    .btn-upload:hover { background: #d4af37; color: #000; }
 
+    /* 퀘스트 목록 */
     .quest-group-btn {
-        width: 100%; text-align: left;
+        width: 100%; 
         background: linear-gradient(to right, #1a0f2e, #2c1e12);
         color: #d4af37; padding: 15px; margin-top: 15px;
         border: 1px solid #5e4b3c; border-radius: 8px;
         font-family: 'Cinzel Decorative'; font-size: 1.2rem;
-        cursor: pointer; transition: 0.3s;
-        display: flex; justify-content: space-between; align-items: center;
+        cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+        flex-wrap: wrap; /* 내용 많으면 줄바꿈 */
     }
-    .quest-group-btn:hover { box-shadow: 0 0 15px rgba(212, 175, 55, 0.3); border-color: #d4af37; }
+    .quest-group-btn:active { transform: scale(0.98); }
 
-    /* 삭제 버튼 스타일 */
     .btn-delete {
         background: #c0392b; color: white; border: none;
-        padding: 5px 10px; border-radius: 5px; font-size: 0.9rem; margin-left: 10px;
-        cursor: pointer; z-index: 10;
+        padding: 8px 12px; border-radius: 5px; font-size: 0.9rem; margin-left: 10px;
+        cursor: pointer;
     }
-    .btn-delete:hover { background: #e74c3c; }
 
     .chapter-list {
-        display: none; background: rgba(0,0,0,0.5); border: 1px solid #444;
-        border-top: none; padding: 10px; margin-bottom: 20px; border-radius: 0 0 8px 8px; width: 100%;
+        display: none; background: rgba(0,0,0,0.3); border: 1px solid #444; border-top: none;
+        padding: 5px; margin-bottom: 20px; border-radius: 0 0 8px 8px;
     }
-
     .chapter-item {
-        display: block; width: 100%; text-align: left; background: transparent;
-        color: #aaa; border: none; padding: 12px; border-bottom: 1px solid #333;
-        cursor: pointer; transition: 0.2s; font-family: 'Spectral'; font-size: 1rem;
+        width: 100%; text-align: left; background: transparent; color: #aaa;
+        border: none; padding: 15px; border-bottom: 1px solid #333; cursor: pointer;
+        font-size: 1rem;
     }
-    .chapter-item:hover { color: #fff; background: rgba(212, 175, 55, 0.1); padding-left: 20px; }
+    .chapter-item:active { background: rgba(255,255,255,0.1); }
+
+    /* 📱 모바일 최적화 */
+    @media (max-width: 768px) {
+        .upload-input { width: 100%; margin-bottom: 10px; }
+        .btn-upload { width: 100%; }
+        .quest-group-btn { font-size: 1rem; padding: 12px; }
+    }
 </style>
 
 <h1>⚔️ 작전지역 (던전)</h1>
@@ -63,11 +68,7 @@
 
 <div class="upload-box">
     <h3 style="margin-top:0;">📜 신규 법령 등록</h3>
-    <p style="font-size: 0.9rem; color: #888;">
-        텍스트 파일의 내용을 자동으로 분석합니다.<br>
-        (예: '제1조(목적)...' -> '제1조(목적)' 챕터 생성)
-    </p>
-    <form method="POST" enctype="multipart/form-data">
+    <form method="POST" enctype="multipart/form-data" style="display:flex; flex-direction:column; align-items:center;">
         <input type="text" class="upload-input" name="new_q_name" placeholder="법령 제목 (예: 민법)" required>
         <input type="file" class="upload-input" name="new_q_file" accept=".txt" required>
         <button type="submit" class="btn-upload">등록하기</button>
@@ -83,9 +84,7 @@
         let parts = q.quest_name.split('-');
         let title = parts[0]; 
         let subTitle = q.quest_name; 
-        if (parts.length > 1) {
-            subTitle = q.quest_name.substring(title.length + 1);
-        }
+        if (parts.length > 1) { subTitle = q.quest_name.substring(title.length + 1); }
         if (!groups[title]) { groups[title] = []; }
         groups[title].push({ fullName: q.quest_name, displayName: subTitle });
     });
@@ -95,33 +94,23 @@
     }
 
     for (const [title, chapters] of Object.entries(groups)) {
-        // 그룹 버튼 컨테이너
         const groupBtn = document.createElement('div');
         groupBtn.className = 'quest-group-btn';
         
-        // 제목 텍스트
         const titleSpan = document.createElement('span');
-        titleSpan.innerHTML = `📂 ${title} <span style="font-size:0.7em; color:#888;">(${chapters.length}개)</span>`;
+        titleSpan.innerHTML = `📂 ${title} <span style="font-size:0.8em; color:#888;">(${chapters.length})</span>`;
         
-        // 삭제 폼 및 버튼 (이벤트 버블링 방지)
         const deleteForm = document.createElement('form');
         deleteForm.method = 'POST';
         deleteForm.style.margin = '0';
         deleteForm.onsubmit = (e) => {
-            if(!confirm(`정말로 '${title}' 법령을 모두 삭제하시겠습니까?\n복구할 수 없습니다.`)) {
-                e.preventDefault();
-            }
+            if(!confirm(`'${title}' 법령을 삭제하시겠습니까?\n(복구 불가)`)) e.preventDefault();
         };
-        
         const deleteInput = document.createElement('input');
-        deleteInput.type = 'hidden';
-        deleteInput.name = 'delete_group';
-        deleteInput.value = title;
-        
+        deleteInput.type = 'hidden'; deleteInput.name = 'delete_group'; deleteInput.value = title;
         const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'btn-delete';
-        deleteBtn.innerHTML = '🗑️ 삭제';
-        deleteBtn.onclick = (e) => { e.stopPropagation(); }; // 버튼 눌렀을때 목록 안 열리게
+        deleteBtn.className = 'btn-delete'; deleteBtn.innerHTML = '🗑️';
+        deleteBtn.onclick = (e) => { e.stopPropagation(); };
 
         deleteForm.appendChild(deleteInput);
         deleteForm.appendChild(deleteBtn);
@@ -137,21 +126,15 @@
             form.method = 'POST';
             
             const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'quest_select';
-            input.value = chap.fullName;
-            
+            input.type = 'hidden'; input.name = 'quest_select'; input.value = chap.fullName;
             const btn = document.createElement('button');
-            btn.className = 'chapter-item';
-            btn.type = 'submit';
+            btn.className = 'chapter-item'; btn.type = 'submit';
             
             let viewName = chap.displayName;
             if (/^\d+$/.test(viewName)) { viewName = `제 ${viewName} 조`; }
             btn.innerText = `📄 ${viewName}`;
 
-            form.appendChild(input);
-            form.appendChild(btn);
-            listDiv.appendChild(form);
+            form.appendChild(input); form.appendChild(btn); listDiv.appendChild(form);
         });
 
         groupBtn.onclick = () => {
