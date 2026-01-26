@@ -42,11 +42,16 @@
                         {% else %}
                             <span style="background:#3498db; color:white; padding:2px 6px; border-radius:4px; font-size:0.8rem; margin-right:5px;">빈칸</span>
                         {% endif %}
+                        
                         {{ item.quest_name.split('-')[-1] }}
                     </span>
                     
                     {% if mode != 'acquire' %}
-                        <span style="color:#2ecc71; font-weight:bold;">Lv.{{ item.level }}</span>
+                        {% if item.level|int >= 5 %}
+                            <span style="color:#f1c40f; font-weight:bold;">👑 졸업/완료 (Lv.{{ item.level }})</span>
+                        {% else %}
+                            <span style="color:#2ecc71; font-weight:bold;">Lv.{{ item.level }}</span>
+                        {% endif %}
                     {% endif %}
                 </button>
             </form>
