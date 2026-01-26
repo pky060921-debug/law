@@ -10,7 +10,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from authlib.integrations.flask_client import OAuth
 from werkzeug.middleware.proxy_fix import ProxyFix 
-import traceback # 에러 추적용
+import traceback
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'lord_of_blanks_key')
@@ -56,7 +56,6 @@ class GoogleSheetManager:
             self.client = gspread.authorize(creds)
             self.sheet = self.client.open("memory_game_db")
             
-            # [핵심] 시트가 없거나 비어있으면 헤더(제목줄) 강제 주입
             self.users_ws = self._get_or_create_sheet("users", self.USER_HEADERS)
             self.collections_ws = self._get_or_create_sheet("collections", self.COLLECTION_HEADERS)
             self.quests_ws = self._get_or_create_sheet("quests", self.QUEST_HEADERS)
@@ -71,12 +70,10 @@ class GoogleSheetManager:
     def _get_or_create_sheet(self, title, headers):
         try:
             ws = self.sheet.worksheet(title)
-            # 내용이 아예 없으면 헤더 추가
             if not ws.get_all_values():
                 ws.append_row(headers)
             return ws
         except:
-            # 시트가 없으면 생성 후 헤더 추가
             ws = self.sheet.add_worksheet(title, 100, 10)
             ws.append_row(headers)
             return ws
@@ -93,11 +90,10 @@ class GoogleSheetManager:
         try:
             self.ensure_connection()
             rows = worksheet.get_all_values()
-            if len(rows) < 2: return [] # 헤더만 있거나 비어있으면 빈 리스트
+            if len(rows) < 2: return []
             headers = rows[0]
             records = []
             for row in rows[1:]:
-                # 행 길이가 헤더보다 짧으면 빈카드로 채움 (인덱스 에러 방지)
                 padded = row + [""] * (len(headers) - len(row))
                 records.append(dict(zip(headers, padded)))
             return records
@@ -113,7 +109,6 @@ class GoogleSheetManager:
                     row['level'] = int(row.get('level') or 1)
                     row['xp'] = int(row.get('xp') or 0)
                     if not row.get('nickname'): row['nickname'] = str(user_id).split('@')[0]
-                    # i는 데이터 인덱스(0부터). 실제 시트 행은 헤더(1) + 0-based(i) + 1 = i + 2
                     return row, i + 2
         except: pass
         return None, None
@@ -252,7 +247,6 @@ class GoogleSheetManager:
         if not self.ensure_connection(): return 0, 0
         
         try:
-            # 1. 유저 데이터 확인 (없으면 복구)
             user_data, fresh_row_idx = self.get_user_by_id(user_id)
             if not user_data:
                 self.register_social(user_id)
@@ -289,7 +283,7 @@ class GoogleSheetManager:
             
         except Exception as e:
             print(f"Process Result Error: {e}")
-            raise e # 에러를 상위로 던져서 화면에 표시
+            raise e
 
     def update_quest_content(self, quest_name, new_content):
         if not self.ensure_connection(): return False
@@ -363,7 +357,7 @@ def zone_generate():
     
     quests = gm.get_quest_list()
     my_progress = gm.get_my_progress(session['user_id'])
-    my_completed = [c['quest_name'] for c in my_progress if c['type'] == 'BLANK']
+    my_completed = [c.get('quest_name') for c in my_progress if c.get('type') == 'BLANK']
     return render_template('zone_generate.html', quests=quests, my_completed=my_completed)
 
 @app.route('/maker', methods=['GET', 'POST'])
@@ -430,13 +424,10 @@ def zone_abbrev():
 @app.route('/play', methods=['GET', 'POST'])
 def play_game():
     if 'user_id' not in session: return redirect(url_for('index'))
-    
-    # [에러 추적] 게임 데이터가 없는 경우 로비로
     game = ACTIVE_GAMES.get(session['user_id'])
     if not game: return redirect(url_for('lobby'))
 
     if request.method == 'GET':
-        import re
         content = game['content']
         parts = []
         targets = []
@@ -456,9 +447,9 @@ def play_game():
         return render_template('play.html', parts=parts, targets=targets, mode=game['mode'], title=game['quest_name'])
 
     elif request.method == 'POST':
-        # [핵심] 500 에러 추적을 위한 try-except 블록
         try:
             clean = game['content']
+            # [수정] UnboundLocalError 방지를 위해 import 제거하고 전역 re 사용
             if game['mode'] != 'abbrev': clean = re.sub(r'\{([^}]+)\}', r'\1', game['content'])
             
             lv, xp = gm.process_result(session['user_id'], session.get('user_row_idx'), game['quest_name'], clean, game['mode'])
@@ -468,7 +459,6 @@ def play_game():
             return_zone = 'review' if game['mode'] == 'review' else ('abbrev' if game['mode'] == 'abbrev' else 'acquire')
             return redirect(url_for(f"zone_{return_zone}"))
         except Exception as e:
-            # 에러 발생 시, 500 페이 대신 에러 내용을 화면에 출력
             error_msg = traceback.format_exc()
             return f"<h3>⚠️ 오류가 발생했습니다.</h3><pre>{error_msg}</pre><br><a href='/lobby'>로비로 돌아가기</a>"
 
