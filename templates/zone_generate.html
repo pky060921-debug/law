@@ -1,38 +1,58 @@
 {% extends "layout.html" %}
+
 {% block content %}
 <h1>🏭 빈칸 카드 생성소</h1>
-<p style="color:#aaa; text-align:center;">법령 텍스트 파일을 업로드하세요.</p>
+<p style="color:#aaa; text-align:center;">법령 텍스트 파일을 업로드하여 카드를 만드세요.</p>
 
-<div style="background:#34495e; padding:20px; border-radius:15px; margin-top:20px; text-align:center;">
+<div style="background:#34495e; padding:30px; border-radius:15px; margin-top:20px; text-align:center; border: 2px solid #f39c12;">
     <form method="POST" enctype="multipart/form-data">
+        <h3 style="margin-top:0; color:#f39c12;">📂 파일 선택</h3>
+        
         <input type="text" name="new_q_name" placeholder="법령 제목 (예: 형법)" required 
-               style="padding:10px; width:80%; margin-bottom:10px; border-radius:5px; border:none;">
+               style="padding:12px; width:80%; margin-bottom:15px; border-radius:5px; border:none; font-size:1rem;">
         <br>
-        <input type="file" name="new_q_file" accept=".txt" required style="color:white;">
+        
+        <input type="file" name="new_q_file" accept=".txt" required 
+               style="color:white; font-size:1rem; padding:10px;">
         <br><br>
-        <button type="submit" style="background:#f39c12; border:none; padding:10px 30px; border-radius:5px; font-weight:bold; cursor:pointer;">
-            카드 생성하기
+        
+        <button type="submit" style="background:#f39c12; border:none; padding:12px 40px; border-radius:30px; font-weight:bold; cursor:pointer; font-size:1.2rem; color:#2c3e50; box-shadow: 0 4px 0 #d35400;">
+            카드 생성 시작 🚀
         </button>
     </form>
 </div>
 
-<div style="margin-top:30px;">
-    <h3>📂 생성된 법령 목록</h3>
-    {% set groups = {} %}
-    {% for q in quests %}
-        {% set title = q.quest_name.split('-')[0] %}
-        {% if title not in groups %}{% set _ = groups.update({title: []}) %}{% endif %}
-        {% set _ = groups[title].append(q) %}
-    {% endfor %}
+<div style="margin-top:40px;">
+    <h3>📂 현재 등록된 법령 목록</h3>
+    
+    {% if not quests %}
+        <div style="text-align:center; padding:40px; color:#95a5a6; border: 2px dashed #555; border-radius: 10px; background: rgba(0,0,0,0.2);">
+            <h2>텅 비었습니다!</h2>
+            <p>위 입력창에서 텍스트 파일을 업로드해주세요.</p>
+        </div>
+    {% else %}
+        {% set groups = {} %}
+        {% for q in quests %}
+            {% set title = q.quest_name.split('-')[0] %}
+            {% if title not in groups %}{% set _ = groups.update({title: []}) %}{% endif %}
+            {% set _ = groups[title].append(q) %}
+        {% endfor %}
 
-    {% for title, items in groups.items() %}
-    <div style="background:#2c3e50; padding:15px; margin-bottom:10px; border-radius:10px; display:flex; justify-content:space-between; align-items:center;">
-        <span style="color:#ecf0f1; font-weight:bold;">{{ title }} ({{ items|length }}개 조항)</span>
-        <form method="POST" style="margin:0;" onsubmit="return confirm('정말 삭제합니까?');">
-            <input type="hidden" name="delete_group" value="{{ title }}">
-            <button style="background:#c0392b; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer;">삭제</button>
-        </form>
-    </div>
-    {% endfor %}
+        {% for title, items in groups.items() %}
+        <div style="background:#2c3e50; padding:15px; margin-bottom:10px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; border:1px solid #444;">
+            <div>
+                <span style="color:#ecf0f1; font-weight:bold; font-size:1.1rem;">{{ title }}</span>
+                <span style="color:#bdc3c7; font-size:0.9rem; margin-left:10px;">(총 {{ items|length }}개 조항)</span>
+            </div>
+            
+            <form method="POST" style="margin:0;" onsubmit="return confirm('정말 \'' + '{{ title }}' + '\' 법령을 모두 삭제하시겠습니까?');">
+                <input type="hidden" name="delete_group" value="{{ title }}">
+                <button style="background:#c0392b; color:white; border:none; padding:8px 15px; border-radius:5px; cursor:pointer; font-weight:bold;">
+                    삭제 🗑️
+                </button>
+            </form>
+        </div>
+        {% endfor %}
+    {% endif %}
 </div>
 {% endblock %}
