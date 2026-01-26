@@ -1,0 +1,79 @@
+{% extends "layout.html" %}
+{% block content %}
+<style>
+    .play-box { background:#34495e; padding:20px; border-radius:15px; line-height:2.0; font-size:1.1rem; text-align:left; }
+    .input-blank { 
+        background:#2c3e50; border:none; border-bottom:2px solid #aaa; color:#f1c40f; 
+        text-align:center; font-family:'Jua'; width:100px;
+    }
+    .input-full { width:100%; height:150px; background:#222; color:white; padding:10px; border:1px solid #555; }
+    .correct { color:#2ecc71; border-color:#2ecc71; }
+    .error { color:#e74c3c; border-color:#e74c3c; }
+</style>
+
+<div style="text-align:center; margin-bottom:20px;">
+    <span style="background:#f39c12; color:black; padding:5px 10px; border-radius:5px; font-weight:bold;">
+        {% if mode == 'acquire' %}획득 작전{% elif mode == 'review' %}복습 작전{% else %}약어 작전{% endif %}
+    </span>
+    <h2>{{ title }}</h2>
+</div>
+
+<div class="play-box">
+    {% if mode == 'abbrev' %}
+        <p style="color:#bdc3c7; margin-bottom:10px;">위 조항의 내용을 모두 작성하세요.</p>
+        <textarea id="full-input" class="input-full"></textarea>
+        <div id="hint-text" style="display:none; color:#2ecc71; margin-top:10px; white-space:pre-wrap;">{{ targets[0] }}</div>
+    {% else %}
+        {% for p in parts %}
+            {% if p.type == 'text' %}
+                {{ p.val | safe }}
+            {% else %}
+                <input type="text" class="input-blank" data-ans="{{ targets[p.id] }}">
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+</div>
+
+<button id="check-btn" onclick="checkAnswer()" style="width:100%; margin-top:20px; padding:15px; background:#3498db; color:white; border:none; border-radius:10px; cursor:pointer;">
+    제출하기
+</button>
+
+<form method="POST" id="win-form" style="display:none;"></form>
+
+<script>
+    const mode = '{{ mode }}';
+    
+    function checkAnswer() {
+        if (mode === 'abbrev') {
+            const input = document.getElementById('full-input').value.replace(/\s+/g, '');
+            const target = `{{ targets[0] }}`.replace(/\s+/g, '');
+            
+            if (input === target) {
+                alert("정답입니다! 완벽하게 암기하셨군요.");
+                document.getElementById('win-form').submit();
+            } else {
+                alert("틀렸습니다. 정답을 확인하세요.");
+                document.getElementById('hint-text').style.display = 'block';
+            }
+        } else {
+            // 빈칸 모드
+            const inputs = document.querySelectorAll('.input-blank');
+            let allOk = true;
+            inputs.forEach(i => {
+                if (i.value.trim() !== i.dataset.ans) {
+                    i.classList.add('error');
+                    allOk = false;
+                } else {
+                    i.classList.remove('error');
+                    i.classList.add('correct');
+                }
+            });
+            
+            if (allOk) {
+                alert("작전 성공!");
+                document.getElementById('win-form').submit();
+            }
+        }
+    }
+</script>
+{% endblock %}
