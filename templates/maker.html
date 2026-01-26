@@ -1,0 +1,108 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<style>
+    /* 제작기 스타일 */
+    .maker-box {
+        background: #34495e; padding: 25px; border-radius: 15px; border: 2px solid #3498db;
+    }
+    textarea {
+        width: 100%; height: 200px; background: #2c3e50; color: #ecf0f1;
+        border: 1px solid #7f8c8d; border-radius: 5px; padding: 15px; font-size: 1.1rem; resize: vertical;
+        font-family: 'Noto Sans KR';
+    }
+    .token {
+        cursor: pointer; padding: 2px 5px; border-radius: 4px; display: inline-block; margin: 2px;
+        border: 1px solid transparent; transition:0.2s;
+    }
+    .token:hover { background: rgba(52, 152, 219, 0.3); border-color: #3498db; }
+    .token.selected { background: #e74c3c; color: white; font-weight: bold; border-color: #c0392b; }
+    
+    .btn-action {
+        background: #3498db; color: white; border: none; padding: 12px 30px; 
+        border-radius: 30px; font-weight: bold; font-size: 1.1rem; cursor: pointer; margin-top: 20px;
+    }
+</style>
+
+<h1>✏️ 빈칸 카드 제작기</h1>
+
+{% if step == 'input' %}
+    <p style="text-align:center; color:#aaa;">원하는 내용을 붙여넣으세요.</p>
+    <div class="maker-box">
+        <form method="POST">
+            <input type="text" name="title" placeholder="카드 제목 (예: 민법 제1조)" required
+                   style="width:100%; padding:10px; margin-bottom:15px; border-radius:5px; border:none;">
+            <textarea name="raw_text" placeholder="여기에 내용을 입력하세요..." required></textarea>
+            <div style="text-align:center;">
+                <button type="submit" class="btn-action">다음 단계로 ➡️</button>
+            </div>
+        </form>
+    </div>
+
+{% elif step == 'edit' %}
+    <p style="text-align:center; color:#aaa;">빈칸으로 만들 단어를 클릭하세요!</p>
+    
+    <div class="maker-box" id="editor-area" style="line-height: 2.0; font-size: 1.2rem;"></div>
+
+    <form method="POST" id="save-form" style="text-align:center;">
+        <input type="hidden" name="title" value="{{ title }}">
+        <input type="hidden" name="final_content" id="final_content">
+        <button type="button" class="btn-action" onclick="saveCard()" style="background:#2ecc71;">
+            저장하기 💾
+        </button>
+    </form>
+
+    <script>
+        const rawText = `{{ raw_text | safe }}`;
+        const editor = document.getElementById('editor-area');
+        let tokens = [];
+
+        // 텍스트를 단어 단위로 쪼개기
+        function initEditor() {
+            // 줄바꿈 보존을 위해 문단으로 나눔
+            const paragraphs = rawText.split('\n');
+            let html = '';
+            
+            paragraphs.forEach(para => {
+                if(!para.trim()) return;
+                html += '<div style="margin-bottom:10px;">';
+                const words = para.split(' ');
+                words.forEach(word => {
+                    // 특수문자 분리 (간단하게)
+                    tokens.push({ text: word, selected: false });
+                    const idx = tokens.length - 1;
+                    html += `<span class="token" onclick="toggle(${idx}, this)">${word}</span> `;
+                });
+                html += '</div>';
+            });
+            editor.innerHTML = html;
+        }
+
+        function toggle(idx, el) {
+            tokens[idx].selected = !tokens[idx].selected;
+            if(tokens[idx].selected) el.classList.add('selected');
+            else el.classList.remove('selected');
+        }
+
+        function saveCard() {
+            let result = "";
+            let currentLine = "";
+            // 다시 텍스트로 합치기 (선택된건 {}로 감쌈)
+            // 주의: 단순 예시이므로 줄바꿈 처리가 완벽하지 않을 수 있음.
+            // 여기서는 HTML 구조 대신 tokens 배열을 순회하며 재구성
+            
+            // 실제로는 원본 텍스트 구조를 유지하는게 어려우므로, 
+            // 위에서 생성한 토큰 순서대로 공백으로 연결합니다.
+            let constructed = tokens.map(t => {
+                return t.selected ? `{${t.text}}` : t.text;
+            }).join(' ');
+            
+            document.getElementById('final_content').value = constructed;
+            document.getElementById('save-form').submit();
+        }
+
+        initEditor();
+    </script>
+{% endif %}
+
+{% endblock %}
