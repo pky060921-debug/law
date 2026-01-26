@@ -2,90 +2,81 @@
 
 {% block content %}
 <style>
-    /* [게임 영역 스타일] */
+    /* [반응형 게임 보드] */
     .play-area {
         background: #34495e;
-        padding: 20px;
+        padding: 30px;
         border-radius: 15px;
         border: 2px solid #2c3e50;
         
-        line-height: 1.8;
-        font-size: 1.1rem;
-        letter-spacing: -0.5px;
-        word-spacing: -1px;
-        
+        /* PC 기본 스타일 */
+        line-height: 2.5; 
+        font-size: 1.3rem; 
         text-align: left;
         word-break: keep-all;
         color: #ecf0f1;
     }
 
     .edit-token {
-        cursor: pointer; padding: 1px 3px; border-radius: 4px; border: 1px solid transparent; transition: 0.2s; display: inline-block;
+        cursor: pointer; padding: 2px 5px; border-radius: 4px; border: 1px solid transparent; display: inline-block;
     }
     .edit-token:hover { background: rgba(243, 156, 18, 0.2); border-color: #f39c12; }
-    .edit-token.selected { background: #e74c3c; color: #fff; font-weight: bold; box-shadow: 0 2px 0 #c0392b; transform: translateY(-1px); }
+    .edit-token.selected { background: #e74c3c; color: #fff; font-weight: bold; }
     
-    .static-text { color: #bdc3c7; font-weight: normal; margin: 0; }
+    .static-text { color: #bdc3c7; font-weight: normal; }
 
+    /* 반응형 입력창 */
     .quiz-input {
         background: #2c3e50; border: none; border-bottom: 2px solid #7f8c8d; color: #f1c40f; text-align: center;
-        font-size: 1.1rem; font-weight: bold; padding: 0; margin: 0 2px; height: 1.4rem;
-        font-family: 'Jua', sans-serif; transition: 0.2s; max-width: 100%;
+        font-size: 1.3rem; font-weight: bold; padding: 0; margin: 0 2px;
+        font-family: 'Jua', sans-serif; transition: 0.2s; 
+        min-width: 30px; max-width: 100%;
     }
     .quiz-input:focus { outline: none; border-bottom-color: #f1c40f; background: #233140; }
     .quiz-input.correct { border-bottom-color: #2ecc71; color: #2ecc71; background: transparent; }
-    .quiz-input.error { border-bottom-color: #e74c3c; color: #e74c3c; background: rgba(231, 76, 60, 0.1); animation: shake 0.3s; }
-
-    .answer-hint {
-        display: none; position: absolute; top: -30px; left: 50%; transform: translateX(-50%);
-        background: #e74c3c; color: white; padding: 2px 6px; border-radius: 6px; 
-        font-size: 0.8rem; white-space: nowrap; z-index: 100; box-shadow: 0 2px 5px rgba(0,0,0,0.3); border: 1px solid white;
-    }
-    .input-wrapper { position: relative; display: inline-block; }
-    .input-wrapper.show-hint .answer-hint { display: block; }
+    .quiz-input.error { border-bottom-color: #e74c3c; color: #e74c3c; animation: shake 0.3s; }
 
     .btn-action {
-        width: 100%; padding: 12px; font-size: 1.2rem; font-family: 'Black Han Sans';
-        border: none; border-radius: 10px; cursor: pointer; margin-top: 20px; transition: 0.2s;
+        width: 100%; padding: 15px; font-size: 1.2rem; font-family: 'Black Han Sans';
+        border: none; border-radius: 10px; cursor: pointer; margin-top: 20px;
     }
-    .btn-blue { background: #3498db; color: white; box-shadow: 0 4px 0 #2980b9; }
-    .btn-blue:hover { transform: translateY(2px); box-shadow: 0 2px 0 #2980b9; }
+    .btn-blue { background: #3498db; color: white; }
+    .btn-next { background: #27ae60; color: white; margin-top: 10px; display: none; }
 
-    /* 다음 단계 버튼 (초록색) */
-    .btn-next {
-        background: #27ae60; color: white; box-shadow: 0 4px 0 #219150; margin-top: 10px;
-        display: none; /* 기본 숨김 */
+    /* 📱 태블릿/모바일 최적화 */
+    @media (max-width: 1024px) {
+        .play-area {
+            font-size: 1.1rem; /* 글씨 줄임 */
+            line-height: 2.0;  /* 줄간격 좁힘 */
+            padding: 20px;
+        }
+        .quiz-input { font-size: 1.1rem; }
     }
-    .btn-next:hover { transform: translateY(2px); box-shadow: 0 2px 0 #219150; }
-
-    @keyframes shake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-3px);} 75%{transform:translateX(3px);} }
 
     @media (max-width: 768px) {
-        .play-area { font-size: 1rem; line-height: 1.6; padding: 15px; }
+        .play-area {
+            font-size: 1rem;
+            line-height: 1.8;
+            padding: 15px;
+        }
         .quiz-input { font-size: 1rem; max-width: 100px; }
     }
+    
+    @keyframes shake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-3px);} 75%{transform:translateX(3px);} }
 </style>
 
 <div style="text-align: center;">
     {% if edit_mode %}
-        <h3 style="color: #f39c12; margin-top:0;">✏️ 빈칸 만들기</h3>
-        <p style="color:#bdc3c7; font-size:0.9rem; margin-bottom:15px;">
-            단어를 터치하여 빈칸을 만드세요.
-        </p>
-
+        <h3 style="color: #f39c12;">✏️ 작전 설계 (빈칸 생성)</h3>
         <div id="edit-board" class="play-area"></div>
-
         <form method="POST" id="edit-form">
             <input type="hidden" name="edited_content" id="edited_content">
-            <button type="button" class="btn-action btn-blue" onclick="submitEdit()">
-                작전 개시 🚀
-            </button>
+            <button type="button" class="btn-action btn-blue" onclick="submitEdit()">작전 개시 🚀</button>
         </form>
-
     {% else %}
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
             <a href="/dungeon" style="text-decoration:none; color:#bdc3c7; font-size:1rem;">🔙 뒤로</a>
-            <div style="font-size:1.2rem; color:#f1c40f; font-weight:bold;">EXP: <span id="xp-display">{{ session['xp'] }}</span></div>
+            <div style="font-size:1.2rem; color:#f1c40f; font-weight:bold;">EXP: {{ session['xp'] }}</div>
         </div>
 
         <div class="play-area" id="game-board">
@@ -93,13 +84,8 @@
                 {% if part.type == 'text' %}
                     <span class="static-text">{{ part.val | replace("①", "<br>①") | replace("②", "<br>②") | replace("③", "<br>③") | replace("④", "<br>④") | replace("⑤", "<br>⑤") | safe }}</span>
                 {% else %}
-                    <span class="input-wrapper">
-                        <span class="answer-hint">{{ targets[part.id] }}</span>
-                        <input type="text" class="quiz-input" 
-                               data-answer="{{ targets[part.id] }}" 
-                               style="width:{{ targets[part.id]|length * 12 + 10 }}px;" 
-                               autocomplete="off">
-                    </span>
+                    <input type="text" class="quiz-input" data-answer="{{ targets[part.id] }}" 
+                           style="width:{{ targets[part.id]|length * 15 + 10 }}px;" autocomplete="off">
                 {% endif %}
             {% endfor %}
         </div>
@@ -108,20 +94,16 @@
             <input type="hidden" name="penalty_count" id="penalty_count" value="0">
         </form>
         
-        <button id="submit-btn" class="btn-action" onclick="checkFinal()" disabled 
-                style="background:#7f8c8d; color:#bdc3c7; cursor:not-allowed; box-shadow:none;">
+        <button id="submit-btn" class="btn-action" onclick="checkFinal()" disabled style="background:#7f8c8d; cursor:not-allowed;">
             빈칸을 모두 채워주세요
         </button>
 
         {% if next_quest %}
         <form action="/dungeon" method="POST" style="margin:0;">
             <input type="hidden" name="quest_select" value="{{ next_quest }}">
-            <button id="next-btn" class="btn-action btn-next">
-                ⏩ 다음 스테이지로 이동
-            </button>
+            <button id="next-btn" class="btn-action btn-next">⏩ 다음 작전으로 이동</button>
         </form>
         {% endif %}
-
     {% endif %}
 </div>
 
@@ -130,159 +112,85 @@
         const rawContent = `{{ raw_content | safe }}`;
         const editBoard = document.getElementById('edit-board');
         let tokenList = []; 
-
         function parseText(text) {
             const paragraphs = text.split('\n');
-            let html = '';
-            tokenList = [];
-
+            let html = ''; tokenList = [];
             paragraphs.forEach(para => {
                 if (!para.trim()) return;
                 html += '<div style="margin-bottom:10px;">';
                 const chunks = para.split(/\s+/);
-                
                 chunks.forEach(chunk => {
                     const subTokens = chunk.split(/([^가-힣a-zA-Z0-9]+)/);
                     subTokens.forEach(token => {
                         if (!token) return;
-                        const isWord = /[가-힣a-zA-Z0-9]/.test(token);
-                        if (!isWord) {
-                            tokenList.push({ text: token, type: 'static', selected: false });
-                            html += `<span class="static-text">${token}</span>`;
-                        } else {
-                            let core = token;
-                            let suffix = "";
+                        if (/[가-힣a-zA-Z0-9]/.test(token)) {
+                            let core = token, suffix = "";
                             const particles = ['으로', '에서', '부터', '까지', '은', '는', '이', '가', '을', '를', '에', '의', '와', '과', '로', '도', '만'];
-                            for (let p of particles) {
-                                if (core.endsWith(p) && core.length > p.length) {
-                                    suffix = p; core = core.substring(0, core.length - p.length); break;
-                                }
-                            }
+                            for (let p of particles) if (core.endsWith(p) && core.length > p.length) { suffix = p; core = core.substring(0, core.length - p.length); break; }
                             const idx = tokenList.length;
                             tokenList.push({ text: core, type: 'word', selected: false });
                             html += `<span class="edit-token" onclick="toggleToken(${idx}, this)">${core}</span>`;
-                            if (suffix) {
-                                tokenList.push({ text: suffix, type: 'static', selected: false });
-                                html += `<span class="static-text">${suffix}</span>`;
-                            }
+                            if (suffix) { tokenList.push({ text: suffix, type: 'static' }); html += `<span class="static-text">${suffix}</span>`; }
+                        } else {
+                            tokenList.push({ text: token, type: 'static' });
+                            html += `<span class="static-text">${token}</span>`;
                         }
                     });
-                    tokenList.push({ text: ' ', type: 'space', selected: false });
-                    html += ' '; 
+                    tokenList.push({ text: ' ', type: 'space' }); html += ' '; 
                 });
                 html += '</div>';
             });
             editBoard.innerHTML = html;
         }
-
         function toggleToken(idx, el) {
-            const token = tokenList[idx];
-            token.selected = !token.selected;
-            if (token.selected) el.classList.add('selected');
-            else el.classList.remove('selected');
+            const token = tokenList[idx]; token.selected = !token.selected;
+            el.classList.toggle('selected');
         }
-
         function submitEdit() {
             let result = "";
-            tokenList.forEach(t => {
-                if (t.type === 'word' && t.selected) { result += `{${t.text}}`; } else { result += t.text; }
-            });
+            tokenList.forEach(t => { result += (t.type === 'word' && t.selected) ? `{${t.text}}` : t.text; });
             document.getElementById('edited_content').value = result;
             document.getElementById('edit-form').submit();
         }
         parseText(rawContent);
-
     {% else %}
         const inputs = document.querySelectorAll('.quiz-input');
-        const xpDisplay = document.getElementById('xp-display');
         const submitBtn = document.getElementById('submit-btn');
         const nextBtn = document.getElementById('next-btn');
-        let currentXP = {{ session['xp'] }};
         let penaltyCount = 0;
 
         inputs.forEach(input => {
             input.addEventListener('change', function() { validate(this); checkAll(); });
-            input.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') { this.blur(); focusNext(this); }
-            });
+            input.addEventListener('keydown', function(e) { if (e.key === 'Enter') { this.blur(); focusNext(this); }});
         });
 
         function validate(input) {
             const val = input.value.trim();
             const ans = input.dataset.answer;
-            const wrapper = input.parentElement;
-
             if (input.classList.contains('correct')) return;
-            if (val === '') {
-                input.classList.remove('error');
-                wrapper.classList.remove('show-hint');
-                return;
-            }
-
             if (val === ans) {
-                input.classList.remove('error');
-                input.classList.add('correct');
-                input.readOnly = true;
-                wrapper.classList.remove('show-hint');
-                updateXP(5);
-            } else {
-                input.classList.add('error');
-                wrapper.classList.add('show-hint');
-                updateXP(-5);
-                penaltyCount++;
+                input.classList.remove('error'); input.classList.add('correct'); input.readOnly = true;
+            } else if (val !== '') {
+                input.classList.add('error'); penaltyCount++;
                 document.getElementById('penalty_count').value = penaltyCount;
             }
         }
 
-        function updateXP(amount) {
-            currentXP += amount;
-            xpDisplay.innerText = currentXP;
-            const effect = document.createElement('span');
-            effect.innerText = amount > 0 ? `+${amount}` : amount;
-            effect.style.position = 'fixed';
-            effect.style.color = amount > 0 ? '#2ecc71' : '#e74c3c';
-            effect.style.fontWeight = 'bold';
-            effect.style.fontSize = '1.5rem';
-            effect.style.textShadow = '1px 1px 0 #000';
-            effect.style.zIndex = '9999';
-            const rect = xpDisplay.getBoundingClientRect();
-            effect.style.left = rect.left + 'px';
-            effect.style.top = (rect.top - 30) + 'px';
-            effect.style.transition = '1s';
-            document.body.appendChild(effect);
-            setTimeout(() => { effect.style.top = (rect.top - 80) + 'px'; effect.style.opacity = 0; }, 50);
-            setTimeout(() => effect.remove(), 1000);
-        }
-
         function checkAll() {
-            const allCorrect = Array.from(inputs).every(i => i.classList.contains('correct'));
-            if (allCorrect) {
+            if (Array.from(inputs).every(i => i.classList.contains('correct'))) {
                 submitBtn.disabled = false;
                 submitBtn.style.background = "#2ecc71";
                 submitBtn.style.color = "white";
                 submitBtn.style.cursor = "pointer";
-                submitBtn.style.boxShadow = "0 4px 0 #27ae60";
                 submitBtn.innerText = "🎉 미션 성공! 보상 획득";
-                
-                // [신규] 다 맞추면 다음 버튼 보이기
-                if (nextBtn) {
-                    nextBtn.style.display = "block";
-                }
+                if (nextBtn) nextBtn.style.display = "block";
             }
         }
-
-        function checkFinal() {
-            document.getElementById('game-form').submit();
-        }
-
+        function checkFinal() { document.getElementById('game-form').submit(); }
         function focusNext(curr) {
             const arr = Array.from(inputs);
             const idx = arr.indexOf(curr);
-            if (idx < arr.length - 1) {
-                for(let i=idx+1; i<arr.length; i++){
-                    if(!arr[i].readOnly) { arr[i].focus(); break; }
-                }
-            }
+            for(let i=idx+1; i<arr.length; i++) if(!arr[i].readOnly) { arr[i].focus(); break; }
         }
     {% endif %}
 </script>
