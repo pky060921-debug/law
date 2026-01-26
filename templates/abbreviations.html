@@ -1,0 +1,56 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<style>
+    .abbrev-form {
+        display: flex; gap: 10px; margin-bottom: 30px; flex-wrap: wrap;
+        background: rgba(0,0,0,0.2); padding: 15px; border-radius: 10px;
+    }
+    .input-field {
+        flex: 1; padding: 10px; border-radius: 5px; border: 1px solid #555; background: #222; color: white;
+        min-width: 120px;
+    }
+    .btn-add {
+        background: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;
+    }
+    
+    .abbrev-list { list-style: none; padding: 0; }
+    .abbrev-item {
+        background: #34495e; border-bottom: 2px solid #2c3e50; padding: 15px; margin-bottom: 10px;
+        border-radius: 8px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .term { font-size: 1.2rem; color: #f39c12; font-weight: bold; margin-bottom: 5px; }
+    .meaning { color: #ecf0f1; font-size: 1rem; }
+    .btn-del {
+        background: #c0392b; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; margin-left: 10px;
+    }
+</style>
+
+<h1>📒 나만의 약어장</h1>
+<p style="color:#aaa;">헷갈리는 용어나 약어를 정리해보세요.</p>
+
+<form method="POST" class="abbrev-form">
+    <input type="text" name="term" class="input-field" placeholder="용어 (예: 건보공단)" required>
+    <input type="text" name="meaning" class="input-field" placeholder="뜻 (예: 국민건강보험공단)" required>
+    <button type="submit" class="btn-add">추가</button>
+</form>
+
+<ul class="abbrev-list">
+    {% for item in abbrevs %}
+    <li class="abbrev-item">
+        <div>
+            <div class="term">{{ item.term }}</div>
+            <div class="meaning">{{ item.meaning }}</div>
+        </div>
+        <form method="POST" style="margin:0;">
+            <input type="hidden" name="delete_term" value="{{ item.term }}">
+            <button type="submit" class="btn-del" onclick="return confirm('삭제하시겠습니까?')">🗑️</button>
+        </form>
+    </li>
+    {% else %}
+    <div style="text-align:center; padding:30px; color:#7f8c8d;">
+        아직 등록된 약어가 없습니다.
+    </div>
+    {% endfor %}
+</ul>
+{% endblock %}
