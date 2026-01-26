@@ -105,6 +105,21 @@ class GoogleSheetManager:
             except: return False
         return False
 
+    def save_manual_quest(self, title, content, creator):
+        if not self.check_connection(): return False
+        try:
+            today = str(datetime.date.today())
+            existing = [str(r.get('quest_name')) for r in self.quests_ws.get_all_records()]
+            final_title = title
+            dup_cnt = 0
+            while final_title in existing:
+                dup_cnt += 1
+                final_title = f"{title}_{dup_cnt}"
+            self.quests_ws.append_row([final_title, content, creator, today])
+            return True
+        except: return False
+
+    # [수정됨] 파일을 빈 줄 기준으로 나누는 로직
     def save_split_quests(self, title_prefix, file_obj, creator):
         if not self.check_connection(): return False, 0
         try:
@@ -112,13 +127,14 @@ class GoogleSheetManager:
             existing = [str(r.get('quest_name')) for r in self.quests_ws.get_all_records()]
             rows_to_add = []
             
+            # 파일 읽기
             file_obj.seek(0)
             try: raw_text = file_obj.read().decode('utf-8')
             except: file_obj.seek(0); raw_text = file_obj.read().decode('cp949')
 
             f_stream = StringIO(raw_text)
-            processed_lines = []
             
+            # 1. 앙키 파일(탭 구분)인 경우
             if '\t' in raw_text:
                 reader = csv.reader(f_stream, delimiter='\t')
                 for row in reader:
@@ -130,30 +146,60 @@ class GoogleSheetManager:
                     answers = [a.strip() for a in re.split(r'[,،、]', back) if a.strip()]
                     text = front
                     for ans in answers: text = re.sub(r'_{2,}', f'{{{ans}}}', text, count=1)
-                    processed_lines.extend(text.split('\n'))
-            else:
-                processed_lines = raw_text.replace('\r\n', '\n').split('\n')
+                    
+                    # 앙키 카드는 한 줄이 한 카드 (제목은 내용 앞부분으로 자동 생성)
+                    snippet = text.split('\n')[0][:15].replace(" ", "")
+                    q_name = f"{title_prefix}-{snippet}"
+                    
+                    dup_count = 0; temp_name = q_name
+                    while any(r[0] == temp_name for r in rows_to_add) or temp_name in existing:
+                        dup_count += 1; temp_name = f"{q_name}_{dup_count}"
+                    
+                    rows_to_add.append([temp_name, text, creator, today])
 
-            last_title = "서문"
-            for line in processed_lines:
-                clean_line = line.strip()
-                if not clean_line: continue
-                art_match = re.search(r'^\s*(?:[^\s]+\s+)?((?:령)?제\s*\d+(?:의\d+)?\s*조(?:\s*\(.*?\))?)', clean_line)
-                cir_match = re.match(r'^([①-⑮])', clean_line)
+            # 2. 일반 텍스트 파일 (빈 줄로 구분)
+            else:
+                # 윈도우 줄바꿈(\r\n)을 리눅스(\n)로 통일
+                normalized_text = raw_text.replace('\r\n', '\n')
                 
-                if art_match: last_title = art_match.group(1).replace(" ", ""); q_name = f"{title_prefix}-{last_title}"
-                elif cir_match: q_name = f"{title_prefix}-{last_title}-{cir_match.group(1)}"
-                else: 
-                    if len(clean_line) < 3: continue
-                    q_name = f"{title_prefix}-{last_title}-내용"
-                
-                if q_name in existing: continue
-                dup_count = 0; temp_name = q_name
-                while any(r[0] == temp_name for r in rows_to_add): dup_count += 1; temp_name = f"{q_name}_{dup_count}"
-                rows_to_add.append([temp_name, clean_line[:45000], creator, today])
+                # 빈 줄(\n\n 이상)을 기준으로 블록 나누기
+                # 정규식: 엔터가 2번 이상 연속으로 나오면 자름
+                blocks = re.split(r'\n\s*\n', normalized_text)
+
+                for block in blocks:
+                    clean_block = block.strip()
+                    if not clean_block: continue
+                    
+                    # 제목 정하기 (우선순위: 법령번호 -> 첫줄내용)
+                    art_match = re.search(r'^\s*(?:[^\s]+\s+)?((?:령)?제\s*\d+(?:의\d+)?\s*조(?:\s*\(.*?\))?)', clean_block)
+                    cir_match = re.match(r'^([①-⑮])', clean_block)
+
+                    if art_match:
+                        # "제1조" 형식이 있으면 그걸 제목으로
+                        snippet = art_match.group(1).replace(" ", "")
+                    elif cir_match:
+                        snippet = f"항목-{cir_match.group(1)}"
+                    else:
+                        # 형식이 없으면 첫 줄의 앞 15글자를 제목으로 사용
+                        first_line = clean_block.split('\n')[0]
+                        snippet = first_line[:15].replace(" ", "")
+                        # 특수문자 제거 (파일 저장 등을 위해)
+                        snippet = re.sub(r'[\\/*?:"<>|]', '', snippet)
+                    
+                    q_name = f"{title_prefix}-{snippet}"
+
+                    # 중복 이름 처리
+                    dup_count = 0; temp_name = q_name
+                    while any(r[0] == temp_name for r in rows_to_add) or temp_name in existing:
+                        dup_count += 1; temp_name = f"{q_name}_{dup_count}"
+                    
+                    rows_to_add.append([temp_name, clean_block[:45000], creator, today])
             
-            if rows_to_add: self.quests_ws.append_rows(rows_to_add); return True, len(rows_to_add)
+            if rows_to_add: 
+                self.quests_ws.append_rows(rows_to_add)
+                return True, len(rows_to_add)
             return False, 0
+
         except Exception as e: print(f"Error: {e}"); return False, 0
 
     def delete_quest_group(self, prefix):
@@ -295,31 +341,19 @@ def zone_generate():
     quests.sort(key=natural_sort_key)
     return render_template('zone_generate.html', quests=quests)
 
-# [수정됨] 편집 모드 라우트
 @app.route('/maker', methods=['GET', 'POST'])
 def maker():
     if 'user_id' not in session: return redirect(url_for('index'))
-    
-    # 1. 편집 화면 불러오기 (GET)
     if request.method == 'GET':
         q_name = request.args.get('quest_name')
         if not q_name: return redirect(url_for('zone_generate'))
-        
-        # DB에서 해당 퀘스트의 내용을 찾아옴
         quests = gm.get_quest_list()
         quest = next((q for q in quests if q['quest_name'] == q_name), None)
-        
         if not quest: return redirect(url_for('zone_generate'))
-        
-        # 기존 내용에서 {빈칸} 문법을 제거하고 순수 텍스트로 복원할지, 아니면 그대로 보여줄지
-        # 여기서는 그대로 보여주어 기존 빈칸도 수정 가능하게 함
         return render_template('maker.html', raw_text=quest['content'], title=q_name)
-    
-    # 2. 저장하기 (POST)
     elif request.method == 'POST':
         q_name = request.form['title']
         content = request.form['final_content']
-        
         if gm.update_quest_content(q_name, content):
             flash("수정되었습니다!")
             return redirect(url_for('zone_generate'))
