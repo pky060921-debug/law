@@ -15,39 +15,103 @@
         }
     </script>
 
-    <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Jua&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&display=swap" rel="stylesheet">
     
     <style>
         :root {
-            --bg-color: #1a252f; --main-color: #f39c12; --text-color: #ecf0f1; --container-bg: #2c3e50;
+            --bg-color: #1a252f;
+            --main-color: #f39c12;
+            --text-color: #ecf0f1;
+            --container-bg: #2c3e50;
         }
-        body {
-            background-color: var(--bg-color); color: var(--text-color); font-family: 'Jua', sans-serif;
-            margin: 0; min-height: 100vh; font-size: 18px;
-        }
-        nav {
-            background: var(--main-color); border-bottom: 4px solid #d35400; padding: 10px 0;
-            position: sticky; top: 0; z-index: 1000; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            text-align: center; white-space: nowrap; overflow-x: auto;
-        }
-        .nav-link {
-            font-family: 'Black Han Sans', sans-serif; color: #2c3e50; text-decoration: none;
-            font-size: 1.4rem; margin: 0 5px; padding: 8px 12px; border-radius: 8px; transition: all 0.2s; display: inline-block;
-        }
-        .nav-link:hover { background: #fff; color: #e67e22; transform: translateY(-3px); }
-        .container {
-            width: 90%; max-width: 1000px; margin: 40px auto; background-color: var(--container-bg);
-            border: 3px solid #34495e; border-radius: 20px; padding: 40px; box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
-        }
-        h1, h2, h3 { font-family: 'Black Han Sans', sans-serif; color: var(--main-color); margin-top: 0; }
-        .flash { background: #e74c3c; border: 2px solid #c0392b; color: white; padding: 15px; text-align: center; margin-bottom: 20px; border-radius: 10px; font-weight: bold; }
 
-        @media (max-width: 1024px) { body { font-size: 16px; } .container { width: 95%; margin: 20px auto; padding: 30px; } h1 { font-size: 2.2rem; } }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            /* 폰트 적용: Light(300) 위주 */
+            font-family: 'Noto Sans KR', sans-serif;
+            font-weight: 300; 
+            margin: 0; 
+            min-height: 100vh;
+            font-size: 17px;
+            line-height: 1.6;
+        }
+
+        /* 네비게이션 */
+        nav {
+            background: var(--main-color);
+            border-bottom: 1px solid #d35400; /* 테두리도 얇게 */
+            padding: 10px 0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            text-align: center;
+            white-space: nowrap;
+            overflow-x: auto;
+        }
+
+        .nav-link {
+            color: #2c3e50;
+            text-decoration: none;
+            font-size: 1.1rem;
+            font-weight: 700; /* 메뉴는 약간 굵게 */
+            margin: 0 10px;
+            padding: 8px 15px;
+            border-radius: 20px; /* 더 둥글게 */
+            transition: all 0.2s;
+            display: inline-block;
+        }
+
+        .nav-link:hover {
+            background: #fff;
+            color: #e67e22;
+            transform: translateY(-2px);
+        }
+
+        /* 메인 컨테이너 */
+        .container {
+            width: 90%;
+            max-width: 1000px;
+            margin: 40px auto;
+            background-color: var(--container-bg);
+            border: 1px solid #34495e; /* 테두리 얇게 */
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        h1, h2, h3 {
+            color: var(--main-color);
+            font-weight: 700; /* 제목은 굵게 */
+            margin-top: 0;
+            letter-spacing: -0.5px;
+        }
+
+        button, input, textarea {
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+
+        .flash { 
+            background: #e74c3c;
+            color: white; 
+            padding: 15px; 
+            text-align: center; 
+            margin-bottom: 20px; 
+            border-radius: 10px;
+            font-weight: 400;
+        }
+
+        /* 반응형 */
         @media (max-width: 768px) {
             body { font-size: 15px; }
-            .container { width: 100%; margin: 0; border-radius: 0; border-left: none; border-right: none; padding: 20px 15px; }
-            .nav-link { font-size: 1.1rem; padding: 6px 10px; margin: 0 2px; }
-            h1 { font-size: 1.8rem; }
+            .container {
+                width: 100%; margin: 0; border-radius: 0; border: none; padding: 20px 15px;
+            }
+            .nav-link { font-size: 0.95rem; padding: 6px 10px; margin: 0 2px; }
+            h1 { font-size: 1.6rem; }
         }
     </style>
 </head>
@@ -55,9 +119,10 @@
     {% if session.user_id %}
     <nav>
         <a href="/lobby" class="nav-link">🏠 본부</a>
-        <a href="/dungeon" class="nav-link">⚡ 작전</a>
-        <a href="/abbreviations" class="nav-link">📒 약어장</a>
-        <a href="/collection" class="nav-link">🦸 도감</a>
+        <a href="/zone/generate" class="nav-link">🏭 생성</a>
+        <a href="/zone/acquire" class="nav-link">📥 획득</a>
+        <a href="/zone/review" class="nav-link">🔄 복습</a>
+        <a href="/zone/abbrev" class="nav-link">⚡ 약어</a>
         <a href="/logout" class="nav-link" style="color: #c0392b;">🚪 퇴근</a>
     </nav>
     {% endif %}
