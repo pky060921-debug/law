@@ -13,28 +13,30 @@
         font-family: 'Noto Sans KR'; margin-bottom: 15px;
     }
     
-    /* [수정됨] 토큰 스타일: 모든 글자 클릭 가능하게 변경 */
+    /* [수정됨] 토큰 스타일 */
     .token {
         cursor: pointer; 
         padding: 0 1px;
-        border-radius: 2px; 
+        border-radius: 3px; 
         display: inline-block; 
         margin: 0;
         border-bottom: 2px solid transparent; 
         transition: 0.1s;
-        color: #ecf0f1; /* 기본 글자색 */
+        color: #ecf0f1; 
+        user-select: none; /* 클릭 시 텍스트 드래그 방지 */
     }
     .token:hover { background: rgba(52, 152, 219, 0.3); border-bottom-color: #3498db; }
     
-    /* 선택된 빈칸 */
+    /* 선택된 빈칸 스타일 */
     .token.selected { 
-        background: #c0392b; color: white; font-weight: 500; border-radius: 2px; border-bottom-color: #c0392b;
+        background: #c0392b; color: white; font-weight: 500; border-radius: 3px; border-bottom-color: #e74c3c;
     }
 
-    /* 띄어쓰기 토큰 */
+    /* 띄어쓰기 */
     .space-token {
         display: inline-block;
         width: 4px;
+        white-space: pre;
     }
     
     .btn-action {
@@ -53,7 +55,7 @@
 
 <div class="maker-box">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-        <span style="font-size:0.9rem; color:#bdc3c7;">* 글자를 클릭하면 빈칸이 됩니다.</span>
+        <span style="font-size:0.9rem; color:#bdc3c7;">* 글자를 클릭하여 빈칸을 만드세요.</span>
         <div>
             <button type="button" class="btn-action btn-switch" onclick="switchMode()">📝 글수정 모드</button>
         </div>
@@ -88,7 +90,7 @@
     const editorArea = document.getElementById('editor-area');
     let tokens = [];
 
-    // 조사 리스트 (분리용)
+    // 조사 목록 (분리용)
     const particles = [
         '으로서', '으로써', '에서도', '에서는', '에게는', '까지도', '부터는', '에게서', '으로는', '하라고', '한다고', '이라는', '이라고', '이나마', '이라도', '야말로', '께서는', 
         '에서는', '에게는', '으로는', '으로부터', '에서부터',
@@ -96,7 +98,7 @@
         '은', '는', '이', '가', '을', '를', '에', '의', '와', '과', '로', '도', '만', '께', '랑', '며', '고', '라', '요', '서', '여'
     ];
 
-    // 초기 실행
+    // 페이지 로드 시 초기화
     initTokens(textArea.value);
 
     function switchMode() {
@@ -112,39 +114,44 @@
     }
 
     function initTokens(text) {
-        // [수정됨] 쪼개는 기준: {빈칸}, 공백, 특수문자
-        const parts = text.split(/(\{.+?\}|\s+|[.,·•;:\(\)\[\]"'\?!~%])/);
+        // [강력한 분리 정규식]
+        // 1. {빈칸} 덩어리
+        // 2. 공백 (\s+)
+        // 3. 특수문자 개별 분리 (온점, 반점, 따옴표, 괄호 등 모든 기호)
+        const parts = text.split(/(\{.+?\}|\s+|[.,·•;:\(\)\[\]"'\?!~%])/g);
         
         let html = '';
         tokens = [];
         let idx = 0;
 
         parts.forEach(part => {
-            if (!part) return;
+            if (!part || part === '') return; // 빈 문자열 무시
             
-            // 1. 공백
+            // 1. 공백 처리 (클릭 불가)
             if (/^\s+$/.test(part)) {
                 html += part.replace(/\n/g, '<br>').replace(/ /g, '<span class="space-token"> </span>');
-                tokens.push({ text: part, type: 'space' });
+                tokens.push({ text: part, type: 'space', selected: false });
+                idx++;
             } 
-            // 2. 이미 {빈칸}인 경우
+            // 2. 이미 {빈칸}인 경우 (클릭 가능, 이미 선택됨)
             else if (part.startsWith('{') && part.endsWith('}')) {
                 const core = part.slice(1, -1);
                 tokens.push({ text: core, type: 'word', selected: true });
                 html += `<span class="token selected" id="t-${idx}" onclick="toggle(${idx})">${core}</span>`;
                 idx++;
             }
-            // 3. 특수문자 (이제 클릭 가능하도록 word 타입으로 처리하되 분리는 유지)
+            // 3. 특수문자인 경우 (클릭 가능하도록 'word'로 취급하되 분리됨)
             else if (/^[.,·•;:\(\)\[\]"'\?!~%]$/.test(part)) {
                 tokens.push({ text: part, type: 'word', selected: false });
                 html += `<span class="token" id="t-${idx}" onclick="toggle(${idx})">${part}</span>`;
                 idx++;
             }
-            // 4. 일반 단어 (조사 분리)
+            // 4. 일반 단어 -> 조사 분리 로직
             else {
                 let noun = part;
                 let particle = "";
 
+                // 조사 분리 시도
                 for (let p of particles) {
                     if (noun.endsWith(p) && noun.length > p.length) {
                         particle = p;
@@ -153,12 +160,12 @@
                     }
                 }
 
-                // 명사 부분
+                // 명사 부분 (클릭 가능)
                 tokens.push({ text: noun, type: 'word', selected: false });
                 html += `<span class="token" id="t-${idx}" onclick="toggle(${idx})">${noun}</span>`;
                 idx++;
 
-                // 조사 부분 (이제 클릭 가능하도록 변경!)
+                // 조사 부분 (클릭 가능)
                 if (particle) {
                     tokens.push({ text: particle, type: 'word', selected: false });
                     html += `<span class="token" id="t-${idx}" onclick="toggle(${idx})">${particle}</span>`;
@@ -171,9 +178,11 @@
 
     function toggle(idx) {
         const t = tokens[idx];
-        if (t.type === 'space') return; // 공백만 클릭 방지
         
-        // [수정됨] 토글 로직 (On <-> Off)
+        // 공백은 클릭 안됨
+        if (t.type === 'space') return;
+        
+        // 상태 반전 (On <-> Off)
         t.selected = !t.selected;
         
         const el = document.getElementById(`t-${idx}`);
@@ -181,22 +190,23 @@
         else el.classList.remove('selected');
     }
 
-    // [신규] 전체 초기화 함수
+    // 전체 초기화 (선택 해제)
     function resetAll() {
-        if(!confirm("모든 빈칸을 취소하시겠습니까?")) return;
+        if(!confirm("모든 빈칸 설정을 초기화하시겠습니까?")) return;
         
         tokens.forEach((t, i) => {
             if (t.selected) {
                 t.selected = false;
                 const el = document.getElementById(`t-${i}`);
-                if(el) el.classList.remove('selected');
+                if (el) el.classList.remove('selected');
             }
         });
     }
 
+    // 텍스트 재조립 ({빈칸} 형식으로 변환)
     function constructText() {
         return tokens.map(t => {
-            if (t.selected) return `{${t.text}}`;
+            if (t.type !== 'space' && t.selected) return `{${t.text}}`;
             return t.text;
         }).join('');
     }
