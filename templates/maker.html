@@ -13,43 +13,37 @@
         font-family: 'Noto Sans KR'; margin-bottom: 15px;
     }
     
-    /* [수정됨] 토큰 스타일: 간격 최소화 */
+    /* [수정됨] 토큰 스타일: 모든 글자 클릭 가능하게 변경 */
     .token {
         cursor: pointer; 
-        padding: 0 1px; /* 패딩 최소화 */
+        padding: 0 1px;
         border-radius: 2px; 
         display: inline-block; 
-        margin: 0; /* 마진 제거 (딱 붙게) */
+        margin: 0;
         border-bottom: 2px solid transparent; 
         transition: 0.1s;
+        color: #ecf0f1; /* 기본 글자색 */
     }
     .token:hover { background: rgba(52, 152, 219, 0.3); border-bottom-color: #3498db; }
     
     /* 선택된 빈칸 */
     .token.selected { 
-        background: #c0392b; color: white; font-weight: 500; border-radius: 2px;
+        background: #c0392b; color: white; font-weight: 500; border-radius: 2px; border-bottom-color: #c0392b;
     }
 
-    /* [수정됨] 조사 및 특수문자: 간격 없애기 */
-    .static-part {
-        display: inline-block;
-        color: #bdc3c7;
-        margin: 0; /* 마진 0 */
-        font-size: 0.95em;
-    }
-
-    /* [수정됨] 띄어쓰기 너비 대폭 축소 */
+    /* 띄어쓰기 토큰 */
     .space-token {
         display: inline-block;
-        width: 3px; /* 띄어쓰기 너비를 3px로 좁힘 */
+        width: 4px;
     }
     
     .btn-action {
-        background: #3498db; color: white; border: none; padding: 10px 25px; 
-        border-radius: 20px; font-weight: bold; font-size: 1rem; cursor: pointer;
+        background: #3498db; color: white; border: none; padding: 8px 20px; 
+        border-radius: 20px; font-weight: bold; font-size: 0.95rem; cursor: pointer; margin: 5px;
     }
-    .btn-save { background: #2ecc71; }
-    .btn-switch { background: #e67e22; margin-bottom: 10px; font-size: 0.9rem; padding: 8px 15px;}
+    .btn-save { background: #2ecc71; padding: 12px 30px; font-size: 1.1rem; }
+    .btn-reset { background: #e74c3c; }
+    .btn-switch { background: #e67e22; }
 </style>
 
 <h1>✏️ 카드 내용 수정</h1>
@@ -58,26 +52,31 @@
 </p>
 
 <div class="maker-box">
-    <div style="text-align:right;">
-        <button type="button" class="btn-action btn-switch" onclick="switchMode()">🔄 모드 전환 (글수정 ↔ 빈칸)</button>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <span style="font-size:0.9rem; color:#bdc3c7;">* 글자를 클릭하면 빈칸이 됩니다.</span>
+        <div>
+            <button type="button" class="btn-action btn-switch" onclick="switchMode()">📝 글수정 모드</button>
+        </div>
     </div>
 
-    <div id="text-mode">
+    <div id="text-mode" style="display:none;">
         <textarea id="raw_text">{{ raw_text }}</textarea>
-        <p style="font-size:0.85rem; color:#bdc3c7;">* 텍스트를 직접 수정할 수 있습니다. 완료 후 '모드 전환'을 눌러 빈칸을 만드세요.</p>
+        <div style="text-align:center;">
+             <button type="button" class="btn-action btn-save" onclick="switchMode()">빈칸 뚫으러 가기 ➡️</button>
+        </div>
     </div>
 
-    <div id="token-mode" style="display:none;">
-        <div id="editor-area" style="line-height: 1.8; font-size: 1.1rem; min-height:150px; text-align: justify; word-break: break-all; letter-spacing: -0.03em;"></div>
+    <div id="token-mode">
+        <div id="editor-area" style="line-height: 1.8; font-size: 1.1rem; min-height:200px; text-align: justify; word-break: break-all; letter-spacing: -0.03em; background:#2c3e50; padding:15px; border-radius:5px;"></div>
         
-        <p style="font-size:0.85rem; color:#bdc3c7; margin-top:10px;">* 단어를 클릭하여 빨간색(빈칸)으로 만드세요. 특수문자와 조사는 자동 분리됩니다.</p>
+        <div style="text-align:center; margin-top:20px;">
+            <button type="button" class="btn-action btn-reset" onclick="resetAll()">🔄 전체 초기화</button>
+            <button type="button" class="btn-action btn-save" onclick="saveCard()">💾 저장하기</button>
+        </div>
         
-        <form method="POST" id="save-form" style="text-align:center; margin-top:20px;">
+        <form method="POST" id="save-form">
             <input type="hidden" name="title" value="{{ title }}">
             <input type="hidden" name="final_content" id="final_content">
-            <button type="button" class="btn-action btn-save" onclick="saveCard()">
-                저장하기 💾
-            </button>
         </form>
     </div>
 </div>
@@ -89,13 +88,16 @@
     const editorArea = document.getElementById('editor-area');
     let tokens = [];
 
-    // [조사 리스트] 길이 긴 순서대로 정렬
+    // 조사 리스트 (분리용)
     const particles = [
         '으로서', '으로써', '에서도', '에서는', '에게는', '까지도', '부터는', '에게서', '으로는', '하라고', '한다고', '이라는', '이라고', '이나마', '이라도', '야말로', '께서는', 
         '에서는', '에게는', '으로는', '으로부터', '에서부터',
         '라고', '으로', '에서', '부터', '까지', '이다', '이나', '이며', '이고', '이라', '이요', '하러', '하지', '하여', '하되', '하고', '하면', '하니', '하다', '에는', '에게', '한테', '보다', '처럼', '만큼', '마다', '조차', '마저', '라도', '나마', '이랑', '께서', '과는', '와는', 
         '은', '는', '이', '가', '을', '를', '에', '의', '와', '과', '로', '도', '만', '께', '랑', '며', '고', '라', '요', '서', '여'
     ];
+
+    // 초기 실행
+    initTokens(textArea.value);
 
     function switchMode() {
         if (textMode.style.display !== 'none') {
@@ -110,7 +112,7 @@
     }
 
     function initTokens(text) {
-        // [수정됨] 정규식: {빈칸}, 공백, 그리고 각종 특수문자([ ], ., ·, ,, ", ' 등)를 모두 분리자로 인식
+        // [수정됨] 쪼개는 기준: {빈칸}, 공백, 특수문자
         const parts = text.split(/(\{.+?\}|\s+|[.,·•;:\(\)\[\]"'\?!~%])/);
         
         let html = '';
@@ -120,29 +122,29 @@
         parts.forEach(part => {
             if (!part) return;
             
-            // 1. 공백 처리
+            // 1. 공백
             if (/^\s+$/.test(part)) {
                 html += part.replace(/\n/g, '<br>').replace(/ /g, '<span class="space-token"> </span>');
                 tokens.push({ text: part, type: 'space' });
             } 
-            // 2. 이미 {빈칸}으로 지정된 경우
+            // 2. 이미 {빈칸}인 경우
             else if (part.startsWith('{') && part.endsWith('}')) {
                 const core = part.slice(1, -1);
                 tokens.push({ text: core, type: 'word', selected: true });
                 html += `<span class="token selected" id="t-${idx}" onclick="toggle(${idx})">${core}</span>`;
                 idx++;
             }
-            // 3. 특수문자인 경우 (클릭 불가, static)
+            // 3. 특수문자 (이제 클릭 가능하도록 word 타입으로 처리하되 분리는 유지)
             else if (/^[.,·•;:\(\)\[\]"'\?!~%]$/.test(part)) {
-                tokens.push({ text: part, type: 'static' });
-                html += `<span class="static-part">${part}</span>`;
+                tokens.push({ text: part, type: 'word', selected: false });
+                html += `<span class="token" id="t-${idx}" onclick="toggle(${idx})">${part}</span>`;
+                idx++;
             }
-            // 4. 일반 단어 -> 조사 분리 시도
+            // 4. 일반 단어 (조사 분리)
             else {
                 let noun = part;
                 let particle = "";
 
-                // 조사 찾기
                 for (let p of particles) {
                     if (noun.endsWith(p) && noun.length > p.length) {
                         particle = p;
@@ -151,15 +153,16 @@
                     }
                 }
 
-                // 명사 부분 (클릭 가능)
+                // 명사 부분
                 tokens.push({ text: noun, type: 'word', selected: false });
                 html += `<span class="token" id="t-${idx}" onclick="toggle(${idx})">${noun}</span>`;
                 idx++;
 
-                // 조사 부분 (클릭 불가)
+                // 조사 부분 (이제 클릭 가능하도록 변경!)
                 if (particle) {
-                    tokens.push({ text: particle, type: 'static' });
-                    html += `<span class="static-part">${particle}</span>`;
+                    tokens.push({ text: particle, type: 'word', selected: false });
+                    html += `<span class="token" id="t-${idx}" onclick="toggle(${idx})">${particle}</span>`;
+                    idx++;
                 }
             }
         });
@@ -168,16 +171,32 @@
 
     function toggle(idx) {
         const t = tokens[idx];
-        if (t.type !== 'word') return;
+        if (t.type === 'space') return; // 공백만 클릭 방지
+        
+        // [수정됨] 토글 로직 (On <-> Off)
         t.selected = !t.selected;
+        
         const el = document.getElementById(`t-${idx}`);
         if (t.selected) el.classList.add('selected');
         else el.classList.remove('selected');
     }
 
+    // [신규] 전체 초기화 함수
+    function resetAll() {
+        if(!confirm("모든 빈칸을 취소하시겠습니까?")) return;
+        
+        tokens.forEach((t, i) => {
+            if (t.selected) {
+                t.selected = false;
+                const el = document.getElementById(`t-${i}`);
+                if(el) el.classList.remove('selected');
+            }
+        });
+    }
+
     function constructText() {
         return tokens.map(t => {
-            if (t.type === 'word' && t.selected) return `{${t.text}}`;
+            if (t.selected) return `{${t.text}}`;
             return t.text;
         }).join('');
     }
