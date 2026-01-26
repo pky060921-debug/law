@@ -3,6 +3,7 @@ import json
 import random
 import datetime
 import re
+import csv
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
@@ -32,6 +33,7 @@ class GoogleSheetManager:
         self.users_ws = None
         self.quests_ws = None
         self.collections_ws = None
+        self.abbrev_ws = None # [신규] 약어장 시트
         self.USER_HEADERS = ["user_id", "password", "level", "xp", "title", "last_idx", "points", "nickname"]
         self.connect_db() 
 
@@ -49,15 +51,21 @@ class GoogleSheetManager:
             self.sheet = self.client.open("memory_game_db")
 
             try: self.users_ws = self.sheet.worksheet("users")
-            except: self.users_ws = self.sheet.add_worksheet("users", 100, 10)
-            
-            if not self.users_ws.get_all_values(): self.users_ws.append_row(self.USER_HEADERS)
+            except: 
+                self.users_ws = self.sheet.add_worksheet("users", 100, 10)
+                if not self.users_ws.get_all_values(): self.users_ws.append_row(self.USER_HEADERS)
 
             try: self.collections_ws = self.sheet.worksheet("collections")
             except: self.collections_ws = self.sheet.add_worksheet("collections", 100, 10)
 
             try: self.quests_ws = self.sheet.worksheet("quests")
             except: self.quests_ws = self.sheet.add_worksheet("quests", 100, 5)
+
+            # [신규] 약어장 시트 연결
+            try: self.abbrev_ws = self.sheet.worksheet("abbreviations")
+            except: 
+                self.abbrev_ws = self.sheet.add_worksheet("abbreviations", 100, 10)
+                if not self.abbrev_ws.get_all_values(): self.abbrev_ws.append_row(["user_id", "term", "meaning", "date"])
 
             print("✅ 구글 시트 연결 성공")
             return True
@@ -69,18 +77,24 @@ class GoogleSheetManager:
         if self.users_ws is None: return self.connect_db()
         return True
 
-    def get_safe_records(self, worksheet, headers_list):
+    def get_safe_records(self, worksheet, headers_list=None):
         try:
             rows = worksheet.get_all_values()
             if len(rows) < 2: return [] 
             records = []
-            for row in rows[1:]: 
-                padded_row = row + [""] * (len(headers_list) - len(row))
-                record = dict(zip(headers_list, padded_row))
+            headers = headers_list if headers_list else rows[0] # 헤더가 없으면 첫줄 사용
+            
+            # 헤더가 인자가 아니고 시트 첫줄인 경우 데이터는 2번째 줄부터
+            start_idx = 1 
+            
+            for row in rows[start_idx:]: 
+                padded_row = row + [""] * (len(headers) - len(row))
+                record = dict(zip(headers, padded_row))
                 records.append(record)
             return records
         except Exception as e: return []
 
+    # --- 기존 메서드들 (생략 없이 유지) ---
     def get_user_by_id(self, user_id):
         if not self.check_connection(): return None, None
         try:
@@ -151,31 +165,41 @@ class GoogleSheetManager:
             rows_to_add = []
             existing = [str(r.get('quest_name')) for r in self.quests_ws.get_all_records()]
             
-            # [수정] 직전 조항 제목을 기억하기 위한 변수
-            last_article_title = "서문" 
+            full_text = "\n".join(lines)
+            is_anki = '\t' in full_text
+            processed_data = []
 
-            for i, line in enumerate(lines):
+            if is_anki:
+                clean_lines = [line for line in lines if not line.startswith('#')]
+                reader = csv.reader(clean_lines, delimiter='\t')
+                for i, row in enumerate(reader):
+                    if len(row) < 2: continue
+                    front = row[0]
+                    back = row[1]
+                    front = re.sub(r'<br\s*/?>', '\n', front)
+                    front = re.sub(r'<[^>]+>', '', front).replace('&nbsp;', ' ')
+                    back = re.sub(r'<br\s*/?>', ',', back)
+                    back = re.sub(r'<[^>]+>', '', back).replace('&nbsp;', ' ')
+                    answers = [a.strip() for a in re.split(r'[,،、]', back) if a.strip()]
+                    reconstructed_text = front
+                    for ans in answers:
+                        reconstructed_text = re.sub(r'_{2,}', f'{{{ans}}}', reconstructed_text, count=1)
+                    processed_data.append(reconstructed_text)
+            else:
+                processed_data = lines
+
+            last_article_title = "서문"
+            for i, line in enumerate(processed_data):
                 if not line.strip(): continue 
-                
-                # 1. 정규식 강화: "제3조의2", "제 5 조(목적)" 등 모두 인식
-                # (?:의\d+)? : '의2' 같은 가지번호 허용
                 article_match = re.match(r'^((?:령)?제\s*\d+(?:의\d+)?\s*조(?:\s*\(.*?\))?)', line.strip())
-                
-                # 2. 동그라미 숫자 인식 (① ~ ⑮)
                 circle_match = re.match(r'^([①-⑮])', line.strip())
 
                 if article_match:
-                    # 새로운 조항 시작 -> 제목 갱신
-                    last_article_title = article_match.group(1) # 예: 제3조의2(목적)
+                    last_article_title = article_match.group(1)
                     quest_name = f"{title_prefix}-{last_article_title}"
-                
                 elif circle_match:
-                    # 동그라미 숫자로 시작하면 -> 직전 제목 + 동그라미 번호
-                    # 예: 민법-제3조의2(목적)-①
                     quest_name = f"{title_prefix}-{last_article_title}-{circle_match.group(1)}"
-                
                 else:
-                    # 그냥 문장 -> 번호 붙임
                     quest_name = f"{title_prefix}-{last_article_title}-{i+1}"
                 
                 if quest_name in existing: continue
@@ -185,7 +209,7 @@ class GoogleSheetManager:
                 self.quests_ws.append_rows(rows_to_add)
                 return True, len(rows_to_add)
             return False, 0
-        except: return False, 0
+        except Exception as e: return False, 0
 
     def process_reward(self, user_id, card_text, current_level, current_xp, row_idx, quest_name):
         if not self.check_connection(): return "ERROR", 0, current_level, current_xp, "ERROR", 0
@@ -255,6 +279,32 @@ class GoogleSheetManager:
             return True, earned_points, new_total_points
         return False, 0, current_points
 
+    # [신규] 약어장 관련 메서드
+    def get_abbreviations(self, user_id):
+        if not self.check_connection(): return []
+        try:
+            records = self.get_safe_records(self.abbrev_ws)
+            return [r for r in records if str(r['user_id']) == str(user_id)]
+        except: return []
+
+    def add_abbreviation(self, user_id, term, meaning):
+        if not self.check_connection(): return False
+        try:
+            self.abbrev_ws.append_row([user_id, term, meaning, str(datetime.date.today())])
+            return True
+        except: return False
+
+    def delete_abbreviation(self, user_id, term):
+        if not self.check_connection(): return False
+        try:
+            records = self.abbrev_ws.get_all_records()
+            for i, row in enumerate(records):
+                if str(row['user_id']) == str(user_id) and row['term'] == term:
+                    self.abbrev_ws.delete_rows(i + 2)
+                    return True
+            return False
+        except: return False
+
 gm = GoogleSheetManager()
 
 def parse_manual_blanks(text):
@@ -272,11 +322,14 @@ def parse_manual_blanks(text):
     if last_idx < len(text): parts.append({'type': 'text', 'val': text[last_idx:]})
     return parts, targets
 
-# [수정] 정렬 함수 강화: 제목-제1조-① 등의 복합 구조 정렬
 def natural_sort_key(q):
     name = q.get('quest_name', '')
-    # 숫자 추출하여 리스트로 변환 (예: 민법-10-1 -> ['민법', 10, 1])
-    return [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', name)]
+    if '-' in name:
+        prefix, suffix = name.rsplit('-', 1)
+        nums = re.findall(r'\d+', suffix)
+        if nums: return (prefix, int(nums[0]), suffix) 
+        return (prefix, 0, suffix)
+    return (name, 0, "")
 
 # --- 라우트 ---
 
@@ -304,10 +357,7 @@ def google_callback():
         user_data, row_idx = gm.get_user_by_id(user_email)
         
         if not user_data:
-            success, msg = gm.register_social(user_email)
-            if not success:
-                flash(f"🚫 가입 실패: {msg}") 
-                return redirect(url_for('index'))
+            gm.register_social(user_email)
             user_data, row_idx = gm.get_user_by_id(user_email)
             
         if user_data:
@@ -317,12 +367,8 @@ def google_callback():
             session['xp'] = user_data.get('xp', 0)
             session['points'] = user_data.get('points', 0)
             session['nickname'] = user_data.get('nickname', user_email.split('@')[0])
-            
             flash(f"환영합니다, {session['nickname']}님!")
             return redirect(url_for('lobby'))
-        else:
-            flash("🚨 정보 로드 실패.")
-            
     except Exception as e:
         flash(f"구글 로그인 오류: {e}")
     return redirect(url_for('index'))
@@ -341,13 +387,7 @@ def lobby():
         session['xp'] = user_data.get('xp', 0)
         session['points'] = user_data.get('points', 0)
         session['nickname'] = user_data.get('nickname', session['user_id'].split('@')[0])
-
-    return render_template('lobby.html', 
-                           nickname=session.get('nickname'), 
-                           level=session['level'], 
-                           xp=session['xp'], 
-                           points=session.get('points', 0),
-                           req_xp=session['level']*100)
+    return render_template('lobby.html', nickname=session.get('nickname'), level=session['level'], xp=session['xp'], points=session.get('points', 0), req_xp=session['level']*100)
 
 @app.route('/update_nickname', methods=['POST'])
 def update_nickname():
@@ -357,43 +397,28 @@ def update_nickname():
         if gm.update_nickname(session['user_row_idx'], new_nick):
             session['nickname'] = new_nick
             flash("닉네임이 변경되었습니다!")
-        else:
-            flash("변경 실패")
+        else: flash("변경 실패")
     return redirect(url_for('lobby'))
 
 @app.route('/dungeon', methods=['GET', 'POST'])
 def dungeon():
     if 'user_id' not in session: return redirect(url_for('index'))
-    
     if request.method == 'POST':
         if 'delete_group' in request.form:
             target_group = request.form['delete_group']
-            if gm.delete_quest_group(target_group):
-                flash(f"🗑️ '{target_group}' 법령이 삭제되었습니다.")
-            else:
-                flash("❌ 삭제 실패")
+            if gm.delete_quest_group(target_group): flash(f"🗑️ '{target_group}' 삭제됨")
+            else: flash("❌ 삭제 실패")
             return redirect(url_for('dungeon'))
-
         elif 'quest_select' in request.form:
             q_name = request.form['quest_select']
             quests = gm.get_quest_list()
             selected_quest = next((q for q in quests if str(q.get('quest_name', '')).strip() == str(q_name).strip()), None)
-            
             if not selected_quest: return redirect(url_for('dungeon'))
-
             content = selected_quest.get('content', "")
             user_id = session['user_id']
-            ACTIVE_GAMES[user_id] = {
-                'content': content, 
-                'quest_name': q_name,
-                'curr_targets': [],
-                'edit_mode': False 
-            }
-            if '{' not in content:
-                ACTIVE_GAMES[user_id]['edit_mode'] = True
-                flash("빈칸을 뚫어주세요!")
+            ACTIVE_GAMES[user_id] = { 'content': content, 'quest_name': q_name, 'curr_targets': [], 'edit_mode': False }
+            if '{' not in content: ACTIVE_GAMES[user_id]['edit_mode'] = True
             return redirect(url_for('dungeon_play'))
-            
         elif 'new_q_name' in request.form:
             title_prefix = request.form['new_q_name']
             f = request.files.get('new_q_file')
@@ -401,10 +426,9 @@ def dungeon():
                 raw_text = f.read().decode('utf-8')
                 lines = raw_text.replace('\r\n', '\n').split('\n')
                 success, count = gm.save_split_quests(title_prefix, lines, session['user_id'])
-                if success: flash(f"{count}개의 스테이지 생성 완료!")
+                if success: flash(f"{count}개 생성!")
                 else: flash("저장 실패")
             return redirect(url_for('dungeon'))
-
     quests = gm.get_quest_list()
     quests.sort(key=natural_sort_key)
     return render_template('dungeon.html', quests=quests)
@@ -415,25 +439,20 @@ def dungeon_play():
     user_id = session['user_id']
     game_data = ACTIVE_GAMES.get(user_id)
     if not game_data: return redirect(url_for('dungeon'))
-    
     content = game_data['content']
     current_quest_name = game_data.get('quest_name')
-
-    # [신규] 다음 퀘스트 찾기 로직
+    
     next_quest = None
     if current_quest_name:
         all_quests = gm.get_quest_list()
-        all_quests.sort(key=natural_sort_key) # 순서대로 정렬
-        
+        all_quests.sort(key=natural_sort_key)
         for i, q in enumerate(all_quests):
             if q['quest_name'] == current_quest_name:
-                if i + 1 < len(all_quests):
-                    next_quest = all_quests[i+1]['quest_name']
+                if i + 1 < len(all_quests): next_quest = all_quests[i+1]['quest_name']
                 break
 
     if game_data['edit_mode']:
-        if request.method == 'GET':
-            return render_template('dungeon_play.html', edit_mode=True, raw_content=content)
+        if request.method == 'GET': return render_template('dungeon_play.html', edit_mode=True, raw_content=content)
         elif request.method == 'POST':
             new_content = request.form.get('edited_content')
             if new_content:
@@ -446,24 +465,49 @@ def dungeon_play():
             parts, targets = parse_manual_blanks(content)
             game_data['curr_targets'] = targets
             return render_template('dungeon_play.html', edit_mode=False, parts=parts, targets=targets, has_blanks=len(targets) > 0, next_quest=next_quest)
-
         elif request.method == 'POST':
             penalty_count = int(request.form.get('penalty_count', 0))
             clean_text = re.sub(r'\{([^}]+)\}', r'\1', content)
-            
-            g, base_gain, nl, nx, stat, cnt = gm.process_reward(
-                session['user_id'], clean_text, session['level'], session['xp'], 
-                session['user_row_idx'], current_quest_name
-            )
+            g, base_gain, nl, nx, stat, cnt = gm.process_reward(session['user_id'], clean_text, session['level'], session['xp'], session['user_row_idx'], current_quest_name)
             final_gain = max(1, base_gain - (penalty_count * 2))
-            
             session['level'] = nl
             session['xp'] = nx - (base_gain - final_gain)
-            
             flash(f"🎉 클리어! (+{final_gain} XP)")
-            
-            # 다음 문제로 넘어가기 (버튼 클릭 처리용 - 사실 GET으로 리다이렉트되어 버튼이 뜸)
             return redirect(url_for('dungeon_play'))
+
+# [신규] 퀘스트 내용 수정 페이지
+@app.route('/dungeon/edit_text', methods=['GET', 'POST'])
+def edit_quest_text():
+    if 'user_id' not in session: return redirect(url_for('index'))
+    user_id = session['user_id']
+    game_data = ACTIVE_GAMES.get(user_id)
+    if not game_data: return redirect(url_for('dungeon'))
+    
+    if request.method == 'POST':
+        new_text = request.form.get('quest_text')
+        if new_text:
+            gm.update_quest_content(game_data['quest_name'], new_text)
+            game_data['content'] = new_text
+            flash("내용이 수정되었습니다.")
+            return redirect(url_for('dungeon_play'))
+            
+    return render_template('edit_quest.html', content=game_data['content'])
+
+# [신규] 약어장 페이지
+@app.route('/abbreviations', methods=['GET', 'POST'])
+def abbreviations():
+    if 'user_id' not in session: return redirect(url_for('index'))
+    if request.method == 'POST':
+        if 'delete_term' in request.form:
+            gm.delete_abbreviation(session['user_id'], request.form['delete_term'])
+        else:
+            term = request.form.get('term')
+            meaning = request.form.get('meaning')
+            if term and meaning: gm.add_abbreviation(session['user_id'], term, meaning)
+        return redirect(url_for('abbreviations'))
+    
+    my_abbrevs = gm.get_abbreviations(session['user_id'])
+    return render_template('abbreviations.html', abbrevs=my_abbrevs)
 
 @app.route('/collection')
 def collection():
@@ -475,21 +519,14 @@ def collection():
 def exchange():
     if 'user_id' not in session: return jsonify({'success': False, 'msg': '로그인 필요'})
     data = request.get_json()
-    card_text = data.get('card_text')
-    success, earned, total = gm.exchange_card(
-        session['user_id'], session['user_row_idx'], card_text, session.get('points', 0), session['level']
-    )
+    success, earned, total = gm.exchange_card(session['user_id'], session['user_row_idx'], data.get('card_text'), session.get('points', 0), session['level'])
     if success:
         session['points'] = total
         return jsonify({'success': True, 'earned': earned, 'new_total': total})
     return jsonify({'success': False, 'msg': '교환 실패'})
 
-# ... (위쪽 코드는 그대로 두세요)
-
-# [추가] PWA 서비스 워커 연결 (이 부분을 추가하세요!)
 @app.route('/sw.js')
-def sw():
-    return app.send_static_file('sw.js')
+def sw(): return app.send_static_file('sw.js')
 
 if __name__ == '__main__':
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
