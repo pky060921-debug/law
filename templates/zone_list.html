@@ -1,63 +1,153 @@
 {% extends "layout.html" %}
+
 {% block content %}
+<style>
+    /* 3단 레이아웃 스타일 (공통) */
+    .law-board {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 15px;
+        margin-top: 10px;
+    }
+    
+    .law-column {
+        background: #253342;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #34495e;
+    }
+
+    .law-column h4 {
+        text-align: center;
+        margin: 0 0 10px 0;
+        padding-bottom: 5px;
+        border-bottom: 2px solid #555;
+        font-size: 1rem;
+    }
+
+    /* 색상 구분 */
+    .col-law h4 { color: #3498db; border-color: #3498db; }
+    .col-decree h4 { color: #e67e22; border-color: #e67e22; }
+    .col-rule h4 { color: #2ecc71; border-color: #2ecc71; }
+
+    .card-item {
+        background: #34495e;
+        padding: 10px;
+        margin-bottom: 8px;
+        border-radius: 5px;
+        border: 1px solid #444;
+        transition: 0.2s;
+        cursor: pointer;
+    }
+    .card-item:hover { border-color: #f39c12; transform: translateY(-2px); }
+
+    /* 모바일 최적화 */
+    @media (max-width: 768px) {
+        .law-board { grid-template-columns: 1fr; }
+        .law-column { margin-bottom: 15px; }
+    }
+    
+    .level-badge {
+        font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; float: right;
+    }
+    .lv-low { background: #2ecc71; color: #fff; }
+    .lv-mid { background: #f39c12; color: #fff; }
+    .lv-high { background: #e74c3c; color: #fff; }
+</style>
+
 <h1>
     {% if mode == 'acquire' %}📥 획득 구역
     {% elif mode == 'review' %}🔄 복습 구역
-    {% else %}⚡ 약어 구역{% endif %}
+    {% else %}⚡ 약어 훈련소{% endif %}
 </h1>
-<p style="text-align:center; color:#aaa;">
-    {% if mode == 'acquire' %}아직 배우지 않은 카드들입니다.{% elif mode == 'review' %}반복할수록 카드가 강력해집니다.{% else %}첫 글자를 보고 전체를 맞추세요!{% endif %}
+<p style="text-align:center; color:#aaa; margin-bottom:20px;">
+    {% if mode == 'acquire' %}새로운 지식을 내 것으로 만드세요.{% elif mode == 'review' %}반복할수록 기억은 강력해집니다.{% else %}두문자(약어)를 완벽하게 암기하세요.{% endif %}
 </p>
 
-<div style="margin-top:20px;">
-    {% if not quests %}
-        <div style="text-align:center; padding:50px; color:#7f8c8d;">
-            학습할 카드가 없습니다.<br>
-            (이전 단계를 먼저 완료해주세요)
-        </div>
-    {% endif %}
+{% if not quests %}
+    <div style="text-align:center; padding:50px; color:#7f8c8d; border: 2px dashed #555; border-radius: 10px;">
+        학습할 카드가 없습니다.<br>
+        (이전 단계를 먼저 완료해주세요)
+    </div>
+{% else %}
 
-    {% set groups = {} %}
-    {% for q in quests %}
-        {% set title = q.quest_name.split('-')[0] %}
-        {% if title not in groups %}{% set _ = groups.update({title: []}) %}{% endif %}
-        {% set _ = groups[title].append(q) %}
+    {% set laws = [] %}{% set decrees = [] %}{% set rules = [] %}{% set others = [] %}
+    
+    {% for item in quests %}
+        {% if item.get('quest_name').startswith('제-') %}
+            {% set _ = laws.append(item) %}
+        {% elif item.get('quest_name').startswith('령-') %}
+            {% set _ = decrees.append(item) %}
+        {% elif item.get('quest_name').startswith('규-') %}
+            {% set _ = rules.append(item) %}
+        {% else %}
+            {% set _ = others.append(item) %}
+        {% endif %}
     {% endfor %}
 
-    {% for title, items in groups.items() %}
-    <details style="margin-bottom:15px; background:#34495e; border-radius:10px; overflow:hidden;" open>
-        <summary style="padding:15px; cursor:pointer; font-weight:bold; color:#f39c12; list-style:none;">
-            📂 {{ title }} <span style="color:#bdc3c7; font-size:0.8em;">({{ items|length }}개)</span>
-        </summary>
-        <div style="background:#2c3e50; padding:10px;">
-            {% for item in items %}
-            <form method="POST" style="margin-bottom:5px;">
-                <input type="hidden" name="quest_name" value="{{ item.quest_name }}">
-                <input type="hidden" name="quest_type" value="{{ item.type }}"> 
-                
-                <button type="submit" style="width:100%; text-align:left; background:transparent; border:none; color:#ecf0f1; padding:12px; border-bottom:1px solid #444; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
-                    <span>
-                        {% if item.type == 'ABBREV' %}
-                            <span style="background:#9b59b6; color:white; padding:2px 6px; border-radius:4px; font-size:0.8rem; margin-right:5px;">약어</span>
-                        {% else %}
-                            <span style="background:#3498db; color:white; padding:2px 6px; border-radius:4px; font-size:0.8rem; margin-right:5px;">빈칸</span>
-                        {% endif %}
-                        
-                        {{ item.quest_name.split('-')[-1] }}
-                    </span>
-                    
-                    {% if mode != 'acquire' %}
-                        {% if item.level|int >= 5 %}
-                            <span style="color:#f1c40f; font-weight:bold;">👑 졸업/완료 (Lv.{{ item.level }})</span>
-                        {% else %}
-                            <span style="color:#2ecc71; font-weight:bold;">Lv.{{ item.level }}</span>
-                        {% endif %}
-                    {% endif %}
-                </button>
-            </form>
+    <div class="law-board">
+        <div class="law-column col-law">
+            <h4>⚖️ 법률 ({{ laws|length }})</h4>
+            {% for item in laws %}
+                {{ card_button(item, mode) }}
             {% endfor %}
         </div>
-    </details>
-    {% endfor %}
-</div>
+
+        <div class="law-column col-decree">
+            <h4>📜 시행령 ({{ decrees|length }})</h4>
+            {% for item in decrees %}
+                {{ card_button(item, mode) }}
+            {% endfor %}
+        </div>
+
+        <div class="law-column col-rule">
+            <h4>📏 시행규칙 ({{ rules|length }})</h4>
+            {% for item in rules %}
+                {{ card_button(item, mode) }}
+            {% endfor %}
+        </div>
+    </div>
+
+    {% if others %}
+    <div style="margin-top:20px; border-top:1px dashed #555; padding-top:15px;">
+        <h4 style="color:#bdc3c7; text-align:center;">📂 기타 문서</h4>
+        <div class="law-board">
+            <div class="law-column" style="grid-column: 1 / -1; background:#2c3e50;">
+                {% for item in others %}
+                    {{ card_button(item, mode) }}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+{% endif %}
+
+{% macro card_button(item, mode) %}
+<form method="POST" style="margin:0;">
+    <input type="hidden" name="quest_name" value="{{ item.get('quest_name') }}">
+    <input type="hidden" name="quest_type" value="{{ item.get('type') }}"> 
+    
+    <button type="submit" class="card-item" style="width:100%; text-align:left; color:#ecf0f1; display:block;">
+        <div style="font-weight:bold; font-size:0.95rem; margin-bottom:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+            {{ item.get('quest_name', '').split('-')[-1] }}
+        </div>
+        
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.8rem; color:#bdc3c7;">
+            <span>
+                {% if mode == 'acquire' %}📥 획득하기
+                {% else %}▶️ 시작{% endif %}
+            </span>
+            
+            {% if mode != 'acquire' %}
+                {% set lv = item.get('level', 1)|int %}
+                <span class="level-badge {% if lv < 5 %}lv-low{% elif lv < 10 %}lv-mid{% else %}lv-high{% endif %}">
+                    Lv.{{ lv }}
+                </span>
+            {% endif %}
+        </div>
+    </button>
+</form>
+{% endmacro %}
+
 {% endblock %}
