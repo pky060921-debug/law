@@ -125,6 +125,7 @@ class GoogleSheetManager:
             except: return False
         return False
 
+    # [핵심 수정] HTML 3단 비교 파일 파싱 지원
     def save_split_quests(self, title_prefix, file_obj, creator):
         if not self.ensure_connection(): return False, 0
         try:
@@ -132,39 +133,90 @@ class GoogleSheetManager:
             existing = [str(r.get('quest_name')) for r in self.get_safe_records(self.quests_ws)]
             rows_to_add = []
             
+            filename = file_obj.filename.lower()
             file_obj.seek(0)
-            try: raw_text = file_obj.read().decode('utf-8')
-            except: file_obj.seek(0); raw_text = file_obj.read().decode('cp949')
+            raw_data = file_obj.read()
+            
+            # 인코딩 감지 시도
+            try: raw_text = raw_data.decode('utf-8')
+            except: raw_text = raw_data.decode('cp949', errors='ignore')
 
-            normalized_text = raw_text.replace('\r\n', '\n')
-            blocks = re.split(r'\n\s*\n', normalized_text)
-
-            for block in blocks:
-                clean_block = block.strip()
-                if not clean_block: continue
+            # --- [HTML 3단 비교 파싱 로직] ---
+            if filename.endswith('.html') or '<html' in raw_text[:100].lower():
+                # 1. 3단 비교 테이블의 행(tr)을 찾습니다.
+                # 정규식으로 <tr>...</tr> 블록을 찾음 (단순화된 파싱)
+                tr_pattern = re.compile(r'<tr[^>]*>(.*?)</tr>', re.DOTALL | re.IGNORECASE)
+                td_pattern = re.compile(r'<td[^>]*>(.*?)</td>', re.DOTALL | re.IGNORECASE)
                 
-                art_match = re.search(r'^\s*(?:[^\s]+\s+)?((?:령)?제\s*\d+(?:의\d+)?\s*조(?:\s*\(.*?\))?)', clean_block)
-                cir_match = re.match(r'^([①-⑮])', clean_block)
+                rows = tr_pattern.findall(raw_text)
+                
+                for row_content in rows:
+                    cols = td_pattern.findall(row_content)
+                    # 3단 구조인 경우만 처리 (법, 령, 규칙)
+                    if len(cols) >= 3:
+                        prefixes = ['제', '령', '규'] # 왼쪽부터 순서대로
+                        
+                        for i in range(3):
+                            col_html = cols[i]
+                            # 제목 추출 (class="bl" 인 span 찾기)
+                            title_match = re.search(r'<span[^>]*class="bl"[^>]*>(.*?)</span>', col_html)
+                            
+                            if title_match:
+                                # 제목이 있으면 카드 생성 대상
+                                raw_title = title_match.group(1).strip()
+                                # HTML 태그 제거
+                                clean_title = re.sub(r'<[^>]+>', '', raw_title).strip()
+                                
+                                # 내용 추출 (HTML 태그 모두 제거 후 텍스트만)
+                                clean_content = re.sub(r'<[^>]+>', '\n', col_html) # 태그를 줄바꿈으로
+                                clean_content = re.sub(r'\n+', '\n', clean_content).strip() # 중복 줄바꿈 제거
+                                
+                                # 카드 이름: 접두어(제/령/규) - 법령제목 - 조문번호
+                                # 예: 제-국민건강보험법-제1조(목적)
+                                final_title = f"{prefixes[i]}-{title_prefix}-{clean_title}"
+                                
+                                # 중복 방지
+                                dup_count = 0; temp_name = final_title
+                                while any(r[0] == temp_name for r in rows_to_add) or temp_name in existing:
+                                    dup_count += 1; temp_name = f"{final_title}_{dup_count}"
+                                
+                                rows_to_add.append([temp_name, clean_content, creator, today])
 
-                if art_match: snippet = art_match.group(1).replace(" ", "")
-                elif cir_match: snippet = f"항목-{cir_match.group(1)}"
+            # --- [기존 TXT/CSV 처리 로직] ---
+            else:
+                f_stream = StringIO(raw_text)
+                if '\t' in raw_text:
+                    reader = csv.reader(f_stream, delimiter='\t')
+                    for row in reader:
+                        if not row or len(row) < 2: continue
+                        text = row[0]
+                        snippet = text.split('\n')[0][:15].replace(" ", "")
+                        q_name = f"{title_prefix}-{snippet}"
+                        rows_to_add.append([q_name, text, creator, today])
                 else:
-                    first_line = clean_block.split('\n')[0]
-                    snippet = first_line[:15].replace(" ", "")
-                    snippet = re.sub(r'[\\/*?:"<>|]', '', snippet)
-                
-                q_name = f"{title_prefix}-{snippet}"
-                dup_count = 0; temp_name = q_name
-                while any(r[0] == temp_name for r in rows_to_add) or temp_name in existing:
-                    dup_count += 1; temp_name = f"{q_name}_{dup_count}"
-                
-                rows_to_add.append([temp_name, clean_block[:45000], creator, today])
+                    normalized_text = raw_text.replace('\r\n', '\n')
+                    blocks = re.split(r'\n\s*\n', normalized_text)
+                    for block in blocks:
+                        clean_block = block.strip()
+                        if not clean_block: continue
+                        first_line = clean_block.split('\n')[0]
+                        snippet = first_line[:15].replace(" ", "").replace('/', '')
+                        q_name = f"{title_prefix}-{snippet}"
+                        
+                        dup_count = 0; temp_name = q_name
+                        while any(r[0] == temp_name for r in rows_to_add) or temp_name in existing:
+                            dup_count += 1; temp_name = f"{q_name}_{dup_count}"
+                        
+                        rows_to_add.append([temp_name, clean_block, creator, today])
             
             if rows_to_add: 
                 self.quests_ws.append_rows(rows_to_add)
                 return True, len(rows_to_add)
             return False, 0
-        except Exception as e: print(f"Error: {e}"); return False, 0
+        except Exception as e: 
+            print(f"Error: {e}")
+            traceback.print_exc()
+            return False, 0
 
     def delete_quest_group(self, prefix):
         if not self.ensure_connection(): return False
@@ -178,7 +230,6 @@ class GoogleSheetManager:
             return True
         except: return False
 
-    # [신규] 낱개 카드 삭제 기능
     def delete_quest_single(self, quest_name):
         if not self.ensure_connection(): return False
         try:
@@ -204,18 +255,15 @@ class GoogleSheetManager:
             if not to_merge: return False
 
             combined_content = "\n\n".join([q.get('content', '') for q in to_merge])
-            
             base_title = to_merge[0].get('quest_name')
             if '-' in base_title: base_prefix = base_title.split('-')[0]
             else: base_prefix = "합본"
-            
             new_title = f"{base_prefix}-합본_{datetime.datetime.now().strftime('%H%M%S')}"
             
             self.quests_ws.append_row([new_title, combined_content, creator, str(datetime.date.today())])
             
             for idx in sorted(to_del_indices, reverse=True):
                 self.quests_ws.delete_rows(idx)
-                
             return True
         except Exception as e:
             print(f"Merge Error: {e}")
@@ -226,13 +274,10 @@ class GoogleSheetManager:
         try:
             cell = self.quests_ws.find(quest_name, in_column=1)
             if not cell: return False
-            
             row_val = self.quests_ws.row_values(cell.row)
             content = row_val[1]
-            
             blocks = re.split(r'\n\s*\n', content)
             blocks = [b.strip() for b in blocks if b.strip()]
-            
             if len(blocks) < 2: return False
 
             rows_to_add = []
@@ -275,6 +320,16 @@ class GoogleSheetManager:
     def get_quest_list(self):
         if not self.ensure_connection(): return []
         return self.get_safe_records(self.quests_ws)
+
+    def get_quest_content(self, quest_name):
+        if not self.ensure_connection(): return ""
+        try:
+            records = self.get_safe_records(self.quests_ws)
+            for r in records:
+                if r.get('quest_name') == quest_name:
+                    return r.get('content', "")
+            return ""
+        except: return ""
 
     def get_my_progress(self, user_id):
         if not self.ensure_connection(): return []
@@ -345,12 +400,10 @@ class GoogleSheetManager:
             u_lv = int(user_data.get('level', 1))
             new_xp = u_xp + amount
             req = u_lv * 100
-            
             while new_xp >= req:
                 u_lv += 1
                 new_xp -= req
                 req = u_lv * 100
-                
             self.users_ws.update_cell(row_idx, 3, u_lv)
             self.users_ws.update_cell(row_idx, 4, new_xp)
             return u_lv, new_xp
@@ -424,7 +477,6 @@ class GoogleSheetManager:
             if cell:
                 self.users_ws.update_cell(cell.row, 3, 1) 
                 self.users_ws.update_cell(cell.row, 4, 0)
-            
             return True
         except Exception as e:
             print(f"Reset Error: {e}")
@@ -524,12 +576,10 @@ def zone_generate():
                 gm.delete_quest_group(request.form['delete_group'])
                 flash("삭제되었습니다.")
             elif 'delete_single' in request.form:
-                if gm.delete_quest_single(request.form['delete_single']):
-                    flash("삭제되었습니다.")
+                if gm.delete_quest_single(request.form['delete_single']): flash("삭제되었습니다.")
                 else: flash("삭제 실패")
             elif 'rename_old' in request.form:
-                old = request.form['rename_old']
-                new = request.form['rename_new']
+                old = request.form['rename_old']; new = request.form['rename_new']
                 if gm.rename_quest(old, new): flash("제목 수정 완료!")
                 else: flash("수정 실패 (존재하지 않거나 DB 오류)")
             elif 'new_q_file' in request.files:
@@ -540,8 +590,7 @@ def zone_generate():
             elif 'merge_targets' in request.form:
                 targets = request.form.getlist('merge_targets')
                 if len(targets) > 1:
-                    if gm.merge_quests(targets, session['user_id']):
-                        flash(f"{len(targets)}개의 카드가 합쳐졌습니다!")
+                    if gm.merge_quests(targets, session['user_id']): flash(f"{len(targets)}개의 카드가 합쳐졌습니다!")
                     else: flash("합치기 실패.")
                 else: flash("합칠 카드를 2개 이상 선택하세요.")
         
@@ -569,7 +618,7 @@ def maker():
                 flash("문단별 나누기 완료!")
                 return redirect(url_for('zone_generate'))
             else:
-                flash("나누기 실패 (빈 줄로 구분된 문단이 없거나 DB 오류)")
+                flash("나누기 실패")
                 return redirect(url_for('maker', quest_name=q_name))
         
         old_title = request.form.get('old_title')
@@ -618,14 +667,13 @@ def zone_review():
             if card:
                 mode = 'abbrev' if q_type == 'ABBREV' else 'review'
                 level = int(card.get('level', 1))
-                if level == 5:
-                    mode = 'register_mnemonic'
+                if level == 5: mode = 'register_mnemonic'
+                
+                latest_content = gm.get_quest_content(q_name)
+                final_content = latest_content if latest_content else card['card_text']
 
                 ACTIVE_GAMES[session['user_id']] = { 
-                    'mode': mode, 
-                    'quest_name': q_name, 
-                    'content': card['card_text'],
-                    'level': level
+                    'mode': mode, 'quest_name': q_name, 'content': final_content, 'level': level
                 }
                 return redirect(url_for('play_game'))
                 
@@ -645,12 +693,12 @@ def zone_abbrev():
             
             if card:
                 mnemonic = gm.get_mnemonic(session['user_id'], q_name)
+                latest_content = gm.get_quest_content(q_name)
+                final_content = latest_content if latest_content else card['card_text']
+
                 ACTIVE_GAMES[session['user_id']] = { 
-                    'mode': 'abbrev', 
-                    'quest_name': q_name, 
-                    'content': card['card_text'],
-                    'level': int(card.get('level', 1)),
-                    'mnemonic': mnemonic
+                    'mode': 'abbrev', 'quest_name': q_name, 'content': final_content,
+                    'level': int(card.get('level', 1)), 'mnemonic': mnemonic
                 }
                 return redirect(url_for('play_game'))
                 
@@ -662,7 +710,6 @@ def zone_abbrev():
 @app.route('/play', methods=['GET', 'POST'])
 def play_game():
     if 'user_id' not in session: return redirect(url_for('index'))
-    
     game = ACTIVE_GAMES.get(session['user_id'])
     if not game: return redirect(url_for('lobby'))
 
@@ -720,13 +767,10 @@ def play_game():
             if game['mode'] != 'abbrev': clean = re.sub(r'\{([^}]+)\}', r'\1', game['content'])
             
             lv, xp = gm.process_result(session['user_id'], session.get('user_row_idx'), game['quest_name'], clean, game['mode'])
-            
             session['level'] = lv; session['xp'] = xp
             
-            if game['mode'] == 'acquire':
-                flash("획득완료")
-            else:
-                flash(f"학습 완료! (현재 Lv.{lv})")
+            if game['mode'] == 'acquire': flash("획득완료")
+            else: flash(f"학습 완료! (현재 Lv.{lv})")
             
             return_zone = 'review' if game['mode'] == 'review' else ('abbrev' if game['mode'] == 'abbrev' else 'acquire')
             return redirect(url_for(f"zone_{return_zone}"))
