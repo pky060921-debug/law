@@ -18,6 +18,7 @@
         border-bottom: 2px solid transparent; transition: 0.1s; color: #ecf0f1; user-select: none;
     }
     .token:hover { background: rgba(52, 152, 219, 0.3); border-bottom-color: #3498db; }
+    
     .token.selected { background: #c0392b; color: white; font-weight: 500; border-radius: 3px; border-bottom-color: #e74c3c; }
     .token.title-word { background: #2980b9; color: white; font-weight: bold; border-radius: 3px; border-bottom-color: #3498db; }
     .space-token { display: inline-block; width: 4px; white-space: pre; }
@@ -30,14 +31,15 @@
     .btn-reset { background: #e74c3c; }
     .btn-mode { opacity: 0.6; }
     .btn-mode.active { opacity: 1; border: 2px solid white; transform: scale(1.05); }
-    
-    /* 나누기 버튼 */
     .btn-split { background: #8e44ad; }
 </style>
 
 <div style="text-align:center; margin-bottom:15px;">
-    <h2 style="color:#f39c12; margin-bottom:5px;">현재 제목: <span id="display-title">{{ title }}</span></h2>
-    <p style="color:#aaa; font-size:0.9rem;">제목 설정 모드로 변경 가능합니다.</p>
+    <h2 style="color:#f39c12; margin-bottom:5px;">
+        <span style="font-size:0.8em; color:#bdc3c7;" id="disp-prefix"></span>
+        <span id="disp-suffix"></span>
+    </h2>
+    <p style="color:#aaa; font-size:0.9rem;">'제목 설정' 모드 시 그룹명은 유지되고 뒷부분만 변경됩니다.</p>
 </div>
 
 <div style="text-align:right; margin-bottom:10px;">
@@ -84,8 +86,23 @@
     const textMode = document.getElementById('text-mode');
     const tokenMode = document.getElementById('token-mode');
     const editorArea = document.getElementById('editor-area');
-    const displayTitle = document.getElementById('display-title');
     
+    // [핵심] 원래 제목 분석
+    const originalFullTitle = "{{ title }}";
+    let groupPrefix = ""; // 그룹명 (예: 형법)
+    let currentSuffix = originalFullTitle; // 뒷부분 (예: 제1조)
+
+    // '-'가 있으면 분리
+    const lastDashIdx = originalFullTitle.lastIndexOf('-');
+    if (lastDashIdx !== -1) {
+        groupPrefix = originalFullTitle.substring(0, lastDashIdx + 1); // "형법-"
+        currentSuffix = originalFullTitle.substring(lastDashIdx + 1);  // "제1조"
+    }
+
+    // 화면 표시 초기화
+    document.getElementById('disp-prefix').innerText = groupPrefix;
+    document.getElementById('disp-suffix').innerText = currentSuffix;
+
     let tokens = [];
     let currentMode = 'blank'; 
 
@@ -165,22 +182,30 @@
         }
     }
 
+    // [핵심] 제목 미리보기 업데이트 (그룹명 + 선택단어)
     function updateTitlePreview() {
-        const titleWords = tokens.filter(t => t.isTitle).map(t => t.text).join('');
-        if (titleWords) {
-            displayTitle.innerText = titleWords;
-            document.getElementById('final_title').value = titleWords;
+        const selectedWords = tokens.filter(t => t.isTitle).map(t => t.text).join('');
+        
+        // 선택한 단어가 있으면 그것을 뒷부분(Suffix)으로 사용
+        if (selectedWords.length > 0) {
+            document.getElementById('disp-suffix').innerText = selectedWords;
+            document.getElementById('final_title').value = groupPrefix + selectedWords;
+        } else {
+            // 선택한 게 없으면 원래 제목 유지
+            document.getElementById('disp-suffix').innerText = currentSuffix;
+            document.getElementById('final_title').value = originalFullTitle;
         }
     }
 
     function resetAll() {
-        if(!confirm("초기화하시겠습니까?")) return;
+        if(!confirm("초기화하시겠습니까? (제목 설정도 초기화됩니다)")) return;
         tokens.forEach((t, i) => {
             t.selected = false;
             t.isTitle = false;
             const el = document.getElementById(`t-${i}`);
             if (el) { el.classList.remove('selected'); el.classList.remove('title-word'); }
         });
+        updateTitlePreview();
     }
 
     function constructText() {
