@@ -1,6 +1,35 @@
 {% extends "layout.html" %}
 
 {% block content %}
+
+{% macro card_button(item, mode) %}
+<form method="POST" style="margin:0;">
+    <input type="hidden" name="quest_name" value="{{ item.get('quest_name') }}">
+    <input type="hidden" name="quest_type" value="{{ item.get('type') }}"> 
+    
+    <button type="submit" class="card-item" style="width:100%; text-align:left; color:#ecf0f1; display:block;">
+        <div style="font-weight:bold; font-size:0.95rem; margin-bottom:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+            {{ item.get('quest_name', '').split('-')[-1] }}
+        </div>
+        
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.8rem; color:#bdc3c7;">
+            <span>
+                {% if mode == 'acquire' %}📥 획득하기
+                {% else %}▶️ 시작{% endif %}
+            </span>
+            
+            {% if mode != 'acquire' %}
+                {% set lv = item.get('level', 1)|int %}
+                <span class="level-badge {% if lv < 5 %}lv-low{% elif lv < 10 %}lv-mid{% else %}lv-high{% endif %}">
+                    Lv.{{ lv }}
+                </span>
+            {% endif %}
+        </div>
+    </button>
+</form>
+{% endmacro %}
+
+
 <style>
     /* 3단 레이아웃 스타일 (공통) */
     .law-board {
@@ -122,32 +151,5 @@
     {% endif %}
 
 {% endif %}
-
-{% macro card_button(item, mode) %}
-<form method="POST" style="margin:0;">
-    <input type="hidden" name="quest_name" value="{{ item.get('quest_name') }}">
-    <input type="hidden" name="quest_type" value="{{ item.get('type') }}"> 
-    
-    <button type="submit" class="card-item" style="width:100%; text-align:left; color:#ecf0f1; display:block;">
-        <div style="font-weight:bold; font-size:0.95rem; margin-bottom:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-            {{ item.get('quest_name', '').split('-')[-1] }}
-        </div>
-        
-        <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.8rem; color:#bdc3c7;">
-            <span>
-                {% if mode == 'acquire' %}📥 획득하기
-                {% else %}▶️ 시작{% endif %}
-            </span>
-            
-            {% if mode != 'acquire' %}
-                {% set lv = item.get('level', 1)|int %}
-                <span class="level-badge {% if lv < 5 %}lv-low{% elif lv < 10 %}lv-mid{% else %}lv-high{% endif %}">
-                    Lv.{{ lv }}
-                </span>
-            {% endif %}
-        </div>
-    </button>
-</form>
-{% endmacro %}
 
 {% endblock %}
