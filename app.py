@@ -178,7 +178,17 @@ class GoogleSheetManager:
             return True
         except: return False
 
-    # [신규] 카드 합치기 (Merge)
+    # [신규] 낱개 카드 삭제 기능
+    def delete_quest_single(self, quest_name):
+        if not self.ensure_connection(): return False
+        try:
+            cell = self.quests_ws.find(quest_name, in_column=1)
+            if cell:
+                self.quests_ws.delete_rows(cell.row)
+                return True
+            return False
+        except: return False
+
     def merge_quests(self, quest_names, creator):
         if not self.ensure_connection() or not quest_names: return False
         try:
@@ -186,7 +196,6 @@ class GoogleSheetManager:
             to_merge = []
             to_del_indices = []
             
-            # 합칠 카드 찾기
             for i, r in enumerate(records):
                 if r.get('quest_name') in quest_names:
                     to_merge.append(r)
@@ -194,20 +203,16 @@ class GoogleSheetManager:
             
             if not to_merge: return False
 
-            # 내용 합치기 (줄바꿈 두 번으로 구분)
             combined_content = "\n\n".join([q.get('content', '') for q in to_merge])
             
-            # 새 제목 생성 (첫 번째 카드 제목 + _합본)
             base_title = to_merge[0].get('quest_name')
             if '-' in base_title: base_prefix = base_title.split('-')[0]
             else: base_prefix = "합본"
             
             new_title = f"{base_prefix}-합본_{datetime.datetime.now().strftime('%H%M%S')}"
             
-            # 새 카드 추가
             self.quests_ws.append_row([new_title, combined_content, creator, str(datetime.date.today())])
             
-            # 기존 카드 삭제 (뒤에서부터 삭제해야 인덱스 안 꼬임)
             for idx in sorted(to_del_indices, reverse=True):
                 self.quests_ws.delete_rows(idx)
                 
@@ -216,35 +221,29 @@ class GoogleSheetManager:
             print(f"Merge Error: {e}")
             return False
 
-    # [신규] 카드 나누기 (Split)
     def split_quest_by_paragraph(self, quest_name, creator):
         if not self.ensure_connection(): return False
         try:
-            # 1. 원본 찾기
             cell = self.quests_ws.find(quest_name, in_column=1)
             if not cell: return False
             
             row_val = self.quests_ws.row_values(cell.row)
-            content = row_val[1] # content column
+            content = row_val[1]
             
-            # 2. 내용 쪼개기 (\n\n 기준)
             blocks = re.split(r'\n\s*\n', content)
             blocks = [b.strip() for b in blocks if b.strip()]
             
-            if len(blocks) < 2: return False # 쪼갤게 없으면 중단
+            if len(blocks) < 2: return False
 
-            # 3. 새 카드들 추가
             rows_to_add = []
             today = str(datetime.date.today())
-            base_name = quest_name.split('_')[0] # 기존 번호 제거 시도
+            base_name = quest_name.split('_')[0]
             
             for idx, block in enumerate(blocks):
                 new_name = f"{base_name}_part{idx+1}"
                 rows_to_add.append([new_name, block, creator, today])
             
             self.quests_ws.append_rows(rows_to_add)
-            
-            # 4. 원본 삭제
             self.quests_ws.delete_rows(cell.row)
             return True
         except Exception as e:
@@ -524,6 +523,10 @@ def zone_generate():
             if 'delete_group' in request.form:
                 gm.delete_quest_group(request.form['delete_group'])
                 flash("삭제되었습니다.")
+            elif 'delete_single' in request.form:
+                if gm.delete_quest_single(request.form['delete_single']):
+                    flash("삭제되었습니다.")
+                else: flash("삭제 실패")
             elif 'rename_old' in request.form:
                 old = request.form['rename_old']
                 new = request.form['rename_new']
@@ -534,7 +537,6 @@ def zone_generate():
                 ok, cnt = gm.save_split_quests(request.form['new_q_name'], f, session['user_id'])
                 if ok: flash(f"{cnt}개 생성 완료!")
                 else: flash("생성 실패: 파일 형식을 확인해주세요.")
-            # [신규] 카드 합치기 처리
             elif 'merge_targets' in request.form:
                 targets = request.form.getlist('merge_targets')
                 if len(targets) > 1:
@@ -561,7 +563,6 @@ def maker():
         if not quest: return redirect(url_for('zone_generate'))
         return render_template('maker.html', raw_text=quest['content'], title=q_name)
     elif request.method == 'POST':
-        # [신규] 카드 나누기 처리
         if 'split_action' in request.form:
             q_name = request.form['title']
             if gm.split_quest_by_paragraph(q_name, session['user_id']):
@@ -571,7 +572,6 @@ def maker():
                 flash("나누기 실패 (빈 줄로 구분된 문단이 없거나 DB 오류)")
                 return redirect(url_for('maker', quest_name=q_name))
         
-        # 기존 저장 로직
         old_title = request.form.get('old_title')
         new_title = request.form.get('title')
         content = request.form['final_content']
