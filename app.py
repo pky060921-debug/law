@@ -2,7 +2,7 @@ import os
 import json
 import random
 import datetime
-import re  # [중요] 여기서 한 번만 선언합니다.
+import re
 import csv
 from io import StringIO
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
@@ -10,7 +10,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from authlib.integrations.flask_client import OAuth
 from werkzeug.middleware.proxy_fix import ProxyFix 
-import traceback
+import traceback # 에러 추적을 위한 필수 모듈
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'lord_of_blanks_key')
@@ -345,20 +345,23 @@ def lobby():
 @app.route('/zone/generate', methods=['GET', 'POST'])
 def zone_generate():
     if 'user_id' not in session: return redirect(url_for('index'))
-    if request.method == 'POST':
-        if 'delete_group' in request.form:
-            gm.delete_quest_group(request.form['delete_group'])
-            flash("삭제되었습니다.")
-        elif 'new_q_file' in request.files:
-            f = request.files['new_q_file']
-            ok, cnt = gm.save_split_quests(request.form['new_q_name'], f, session['user_id'])
-            if ok: flash(f"{cnt}개 생성 완료!")
-            else: flash("생성 실패: 파일 형식을 확인해주세요.")
-    
-    quests = gm.get_quest_list()
-    my_progress = gm.get_my_progress(session['user_id'])
-    my_completed = [c.get('quest_name') for c in my_progress if c.get('type') == 'BLANK']
-    return render_template('zone_generate.html', quests=quests, my_completed=my_completed)
+    try:
+        if request.method == 'POST':
+            if 'delete_group' in request.form:
+                gm.delete_quest_group(request.form['delete_group'])
+                flash("삭제되었습니다.")
+            elif 'new_q_file' in request.files:
+                f = request.files['new_q_file']
+                ok, cnt = gm.save_split_quests(request.form['new_q_name'], f, session['user_id'])
+                if ok: flash(f"{cnt}개 생성 완료!")
+                else: flash("생성 실패: 파일 형식을 확인해주세요.")
+        
+        quests = gm.get_quest_list()
+        my_progress = gm.get_my_progress(session['user_id'])
+        my_completed = [c.get('quest_name') for c in my_progress if c.get('type') == 'BLANK']
+        return render_template('zone_generate.html', quests=quests, my_completed=my_completed)
+    except Exception as e:
+        return f"<h3>⚠️ 생성 구역 오류</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로</a>"
 
 @app.route('/maker', methods=['GET', 'POST'])
 def maker():
@@ -383,58 +386,65 @@ def maker():
 @app.route('/zone/acquire', methods=['GET', 'POST'])
 def zone_acquire():
     if 'user_id' not in session: return redirect(url_for('index'))
-    if request.method == 'POST':
-        q_name = request.form['quest_name']
-        all_q = gm.get_quest_list()
-        quest = next((q for q in all_q if q['quest_name'] == q_name), None)
-        if quest:
-            ACTIVE_GAMES[session['user_id']] = { 'mode': 'acquire', 'quest_name': q_name, 'content': quest['content'] }
-            return redirect(url_for('play_game'))
-    quests = gm.get_available_quests(session['user_id'], 'acquire')
-    return render_template('zone_list.html', title="획득 구역", quests=quests, mode='acquire')
+    try:
+        if request.method == 'POST':
+            q_name = request.form['quest_name']
+            all_q = gm.get_quest_list()
+            quest = next((q for q in all_q if q['quest_name'] == q_name), None)
+            if quest:
+                ACTIVE_GAMES[session['user_id']] = { 'mode': 'acquire', 'quest_name': q_name, 'content': quest['content'] }
+                return redirect(url_for('play_game'))
+        quests = gm.get_available_quests(session['user_id'], 'acquire')
+        return render_template('zone_list.html', title="획득 구역", quests=quests, mode='acquire')
+    except Exception as e:
+        return f"<h3>⚠️ 획득 구역 오류</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로</a>"
 
+# [핵심 디버깅] 복습 구역 에러 추적
 @app.route('/zone/review', methods=['GET', 'POST'])
 def zone_review():
     if 'user_id' not in session: return redirect(url_for('index'))
-    if request.method == 'POST':
-        q_name = request.form['quest_name']
-        q_type = request.form.get('quest_type', 'BLANK')
+    try:
+        if request.method == 'POST':
+            q_name = request.form['quest_name']
+            q_type = request.form.get('quest_type', 'BLANK')
+            cards = gm.get_available_quests(session['user_id'], 'review')
+            card = next((c for c in cards if c['quest_name'] == q_name and c['type'] == q_type), None)
+            if card:
+                mode = 'abbrev' if q_type == 'ABBREV' else 'review'
+                ACTIVE_GAMES[session['user_id']] = { 'mode': mode, 'quest_name': q_name, 'content': card['card_text'] }
+                return redirect(url_for('play_game'))
         cards = gm.get_available_quests(session['user_id'], 'review')
-        card = next((c for c in cards if c['quest_name'] == q_name and c['type'] == q_type), None)
-        if card:
-            mode = 'abbrev' if q_type == 'ABBREV' else 'review'
-            ACTIVE_GAMES[session['user_id']] = { 'mode': mode, 'quest_name': q_name, 'content': card['card_text'] }
-            return redirect(url_for('play_game'))
-    cards = gm.get_available_quests(session['user_id'], 'review')
-    return render_template('zone_list.html', title="복습 구역", quests=cards, mode='review')
+        return render_template('zone_list.html', title="복습 구역", quests=cards, mode='review')
+    except Exception as e:
+        # 에러 내용을 화면에 출력
+        return f"<h3>⚠️ 복습 구역 오류 발생</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로 돌아가기</a>"
 
 @app.route('/zone/abbrev', methods=['GET', 'POST'])
 def zone_abbrev():
     if 'user_id' not in session: return redirect(url_for('index'))
-    if request.method == 'POST':
-        q_name = request.form['quest_name']
+    try:
+        if request.method == 'POST':
+            q_name = request.form['quest_name']
+            cards = gm.get_available_quests(session['user_id'], 'abbrev')
+            card = next((c for c in cards if c['quest_name'] == q_name), None)
+            if card:
+                ACTIVE_GAMES[session['user_id']] = { 'mode': 'abbrev', 'quest_name': q_name, 'content': card['card_text'] }
+                return redirect(url_for('play_game'))
         cards = gm.get_available_quests(session['user_id'], 'abbrev')
-        card = next((c for c in cards if c['quest_name'] == q_name), None)
-        if card:
-            ACTIVE_GAMES[session['user_id']] = { 'mode': 'abbrev', 'quest_name': q_name, 'content': card['card_text'] }
-            return redirect(url_for('play_game'))
-    cards = gm.get_available_quests(session['user_id'], 'abbrev')
-    return render_template('zone_list.html', title="약어 훈련소", quests=cards, mode='abbrev')
+        return render_template('zone_list.html', title="약어 훈련소", quests=cards, mode='abbrev')
+    except Exception as e:
+        return f"<h3>⚠️ 약어 구역 오류</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로</a>"
 
-# [핵심] re 모듈 이슈를 완벽하게 해결한 play_game 라우트
 @app.route('/play', methods=['GET', 'POST'])
 def play_game():
     if 'user_id' not in session: return redirect(url_for('index'))
-    
     game = ACTIVE_GAMES.get(session['user_id'])
     if not game: return redirect(url_for('lobby'))
 
     if request.method == 'GET':
-        # 여기 있던 import re를 확실히 지웠습니다!
         content = game['content']
         parts = []
         targets = []
-        
         if game['mode'] == 'abbrev':
             clean = re.sub(r'\{([^}]+)\}', r'\1', content)
             parts = [{'type':'text', 'val': '전체 내용을 입력하세요:'}, {'type':'input', 'id':0}]
@@ -448,15 +458,12 @@ def play_game():
                 targets.append(m.group(1))
                 idx += 1; last = e
             if last < len(content): parts.append({'type':'text', 'val': content[last:]})
-        
         return render_template('play.html', parts=parts, targets=targets, mode=game['mode'], title=game['quest_name'])
 
     elif request.method == 'POST':
         try:
             clean = game['content']
-            if game['mode'] != 'abbrev': 
-                # 전역 re 모듈을 사용하므로 이제 에러가 안 납니다
-                clean = re.sub(r'\{([^}]+)\}', r'\1', game['content'])
+            if game['mode'] != 'abbrev': clean = re.sub(r'\{([^}]+)\}', r'\1', game['content'])
             
             lv, xp = gm.process_result(session['user_id'], session.get('user_row_idx'), game['quest_name'], clean, game['mode'])
             
@@ -465,8 +472,7 @@ def play_game():
             return_zone = 'review' if game['mode'] == 'review' else ('abbrev' if game['mode'] == 'abbrev' else 'acquire')
             return redirect(url_for(f"zone_{return_zone}"))
         except Exception as e:
-            error_msg = traceback.format_exc()
-            return f"<h3>⚠️ 오류가 발생했습니다.</h3><pre>{error_msg}</pre><br><a href='/lobby'>로비로 돌아가기</a>"
+            return f"<h3>⚠️ 제출 오류</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로</a>"
 
 @app.route('/update_nickname', methods=['POST'])
 def update_nickname():
