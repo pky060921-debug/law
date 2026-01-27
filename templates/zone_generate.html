@@ -16,10 +16,10 @@
     </form>
 </div>
 
-<form method="POST" id="merge-form" style="margin-top:40px;">
+<form method="POST" id="main-list-form" style="margin-top:40px;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
         <h3>📂 등록된 법령 목록</h3>
-        <button type="submit" name="merge_action" value="merge" style="background:#8e44ad; color:white; border:none; padding:8px 15px; border-radius:5px; font-weight:bold; cursor:pointer;">
+        <button type="submit" name="merge_targets" value="merge" style="background:#8e44ad; color:white; border:none; padding:8px 15px; border-radius:5px; font-weight:bold; cursor:pointer;" onclick="return confirm('선택한 카드들을 하나로 합치시겠습니까?');">
             🔗 선택 합치기
         </button>
     </div>
@@ -45,7 +45,10 @@
             
             <div style="background:#34495e; padding:10px; border-top:1px solid #444;">
                 <div style="text-align:right; margin-bottom:10px;">
-                    </div>
+                    <button type="submit" name="delete_group" value="{{ title }}" style="background:#c0392b; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer; font-size:0.9rem;" onclick="return confirm('정말 \'' + '{{ title }}' + '\' 그룹 전체를 삭제하시겠습니까?');">
+                        그룹 전체 삭제 🗑️
+                    </button>
+                </div>
 
                 {% for item in items %}
                 <div style="padding:10px; border-bottom:1px solid #555; display:flex; align-items:center;">
@@ -60,6 +63,9 @@
                         </span>
                         
                         <div>
+                            <button type="submit" name="delete_single" value="{{ item.get('quest_name') }}" style="background:#e74c3c; color:white; border:none; padding:5px 8px; border-radius:5px; cursor:pointer; font-size:0.8rem; margin-right:5px;" onclick="return confirm('이 카드를 삭제하시겠습니까?');">
+                                🗑️
+                            </button>
                             <a href="/maker?quest_name={{ item.get('quest_name') }}" style="text-decoration:none;">
                                 <button type="button" style="background:#2ecc71; color:white; border:none; padding:5px 12px; border-radius:5px; cursor:pointer; font-size:0.9rem;">
                                     📝 수정/빈칸
