@@ -40,8 +40,7 @@ class GoogleSheetManager:
         self.USER_HEADERS = ["user_id", "password", "level", "xp", "title", "last_idx", "points", "nickname"]
         self.QUEST_HEADERS = ["quest_name", "content", "creator", "date"]
         self.COLLECTION_HEADERS = ["user_id", "card_text", "grade", "date", "quest_name", "level", "type"]
-        # [수정] 약어 시트 헤더: 용어(quest_name), 뜻(mnemonic)
-        self.ABBREV_HEADERS = ["user_id", "quest_name", "mnemonic", "date"]
+        self.ABBREV_HEADERS = ["user_id", "term", "meaning", "date"]
         self.connect_db() 
 
     def connect_db(self):
@@ -286,18 +285,14 @@ class GoogleSheetManager:
             if cell: self.quests_ws.update_cell(cell.row, 2, new_content); return True
         except: return False
 
-    # [신규] 약어(Mnemonic) 저장 및 로드
     def save_mnemonic(self, user_id, quest_name, mnemonic):
         if not self.ensure_connection(): return False
         try:
-            # 기존 약어 있는지 확인 (중복 방지)
             records = self.get_safe_records(self.abbrev_ws)
             for i, r in enumerate(records):
                 if str(r.get('user_id')) == str(user_id) and r.get('quest_name') == quest_name:
-                    # 있으면 업데이트 (행 번호 = i + 2)
                     self.abbrev_ws.update_cell(i + 2, 3, mnemonic)
                     return True
-            # 없으면 추가
             self.abbrev_ws.append_row([user_id, quest_name, mnemonic, str(datetime.date.today())])
             return True
         except: return False
@@ -359,6 +354,12 @@ def lobby():
     user, _ = gm.get_user_by_id(session['user_id'])
     if user: session['level'] = user['level']; session['xp'] = user['xp']; session['nickname'] = user['nickname']; session['points'] = user['points']
     return render_template('lobby.html', level=session['level'], xp=session['xp'], points=session['points'], nickname=session['nickname'], req_xp=session['level']*100)
+
+# [추가] 로그아웃 라우트
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('index'))
 
 @app.route('/zone/generate', methods=['GET', 'POST'])
 def zone_generate():
@@ -430,8 +431,6 @@ def zone_review():
             if card:
                 mode = 'abbrev' if q_type == 'ABBREV' else 'review'
                 level = int(card.get('level', 1))
-                
-                # [핵심] 레벨 5 이상인 경우 -> 약어 등록 모드(register_mnemonic)로 전환
                 if level == 5:
                     mode = 'register_mnemonic'
 
@@ -458,15 +457,13 @@ def zone_abbrev():
             card = next((c for c in cards if c.get('quest_name') == q_name), None)
             
             if card:
-                # 저장된 약어 불러오기
                 mnemonic = gm.get_mnemonic(session['user_id'], q_name)
-                
                 ACTIVE_GAMES[session['user_id']] = { 
                     'mode': 'abbrev', 
                     'quest_name': q_name, 
                     'content': card['card_text'],
                     'level': int(card.get('level', 1)),
-                    'mnemonic': mnemonic # 약어 전달
+                    'mnemonic': mnemonic
                 }
                 return redirect(url_for('play_game'))
                 
@@ -489,26 +486,19 @@ def play_game():
         parts = []
         targets = []
         
-        # 1. 약어 등록 모드 (복습 레벨 5)
         if game['mode'] == 'register_mnemonic':
             parts = [{'type':'text', 'val': '이 카드의 약어(두문자)를 만드세요.<br>예: 예방 진단 치료 재활 -> 예단치재'}]
-            # 여기서는 targets가 필요 없지만 형식상 채움
             targets = []
 
-        # 2. 약어 테스트 모드 (약어 구역)
         elif game['mode'] == 'abbrev':
             clean = re.sub(r'\{([^}]+)\}', r'\1', content)
-            
-            # DB에 저장된 약어가 있으면 그걸 타겟으로, 없으면 안내 문구
             mnemonic_target = game.get('mnemonic', '약어없음')
-            
             parts = [
                 {'type':'text', 'val': '1단계: 이 카드의 약어(두문자)를 입력하세요.'}, 
                 {'type':'input_abbrev', 'id':0, 'mnemonic_ans': mnemonic_target}
             ]
             targets = [clean.strip()] 
             
-        # 3. 일반 복습 (레벨 1~4) 및 획득
         else:
             last = 0; idx = 0
             for m in re.finditer(r'\{([^}]+)\}', content):
@@ -523,13 +513,10 @@ def play_game():
 
     elif request.method == 'POST':
         try:
-            # 1. 약어 등록 처리
             if game['mode'] == 'register_mnemonic':
                 user_mnemonic = request.form.get('user_mnemonic', '').strip()
                 if user_mnemonic:
-                    # 약어 저장
                     gm.save_mnemonic(session['user_id'], game['quest_name'], user_mnemonic)
-                    # 레벨 업 (5 -> 6)
                     lv, xp = gm.process_result(session['user_id'], session.get('user_row_idx'), game['quest_name'], game['content'], 'review')
                     session['level'] = lv; session['xp'] = xp
                     flash(f"약어 '{user_mnemonic}' 저장 완료! (약어 구역에서 테스트하세요)")
@@ -538,7 +525,6 @@ def play_game():
                     flash("약어를 입력해주세요.")
                     return redirect(url_for('play_game'))
 
-            # 2. 일반 학습 처리
             clean = game['content']
             if game['mode'] != 'abbrev': clean = re.sub(r'\{([^}]+)\}', r'\1', game['content'])
             
