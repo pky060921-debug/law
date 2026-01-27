@@ -56,9 +56,13 @@
                     
                     <div style="flex:1; display:flex; justify-content:space-between; align-items:center;">
                         <span style="color:#ecf0f1; font-size:0.95rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:10px; flex:1;">
+                            
                             {% if item.get('quest_name') in my_completed %}
-                                <span style="color:#2ecc71; font-weight:bold;">[✅ 획득완료]</span>
+                                <span style="color:#2ecc71; font-weight:bold; font-size:0.8rem; margin-right:5px;">[✅ 획득완료]</span>
+                            {% elif '{' in item.get('content', '') %}
+                                <span style="color:#3498db; font-weight:bold; font-size:0.8rem; margin-right:5px;">[🔨 생성완료]</span>
                             {% endif %}
+                            
                             {{ item.get('quest_name', '').split('-')[-1] }}
                         </span>
                         
