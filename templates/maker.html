@@ -13,30 +13,13 @@
         font-family: 'Noto Sans KR'; margin-bottom: 15px;
     }
     
-    /* 토큰 (글자) */
     .token {
-        cursor: pointer; 
-        padding: 0 1px;
-        border-radius: 3px; 
-        display: inline-block; 
-        margin: 0;
-        border-bottom: 2px solid transparent; 
-        transition: 0.1s;
-        color: #ecf0f1; 
-        user-select: none;
+        cursor: pointer; padding: 0 1px; border-radius: 3px; display: inline-block; margin: 0;
+        border-bottom: 2px solid transparent; transition: 0.1s; color: #ecf0f1; user-select: none;
     }
     .token:hover { background: rgba(52, 152, 219, 0.3); border-bottom-color: #3498db; }
-    
-    /* 빈칸 (빨강) */
-    .token.selected { 
-        background: #c0392b; color: white; font-weight: 500; border-radius: 3px; border-bottom-color: #e74c3c;
-    }
-
-    /* 제목 (파랑) */
-    .token.title-word {
-        background: #2980b9; color: white; font-weight: bold; border-radius: 3px; border-bottom-color: #3498db;
-    }
-
+    .token.selected { background: #c0392b; color: white; font-weight: 500; border-radius: 3px; border-bottom-color: #e74c3c; }
+    .token.title-word { background: #2980b9; color: white; font-weight: bold; border-radius: 3px; border-bottom-color: #3498db; }
     .space-token { display: inline-block; width: 4px; white-space: pre; }
     
     .btn-action {
@@ -47,24 +30,30 @@
     .btn-reset { background: #e74c3c; }
     .btn-mode { opacity: 0.6; }
     .btn-mode.active { opacity: 1; border: 2px solid white; transform: scale(1.05); }
+    
+    /* 나누기 버튼 */
+    .btn-split { background: #8e44ad; }
 </style>
 
 <div style="text-align:center; margin-bottom:15px;">
     <h2 style="color:#f39c12; margin-bottom:5px;">현재 제목: <span id="display-title">{{ title }}</span></h2>
-    <p style="color:#aaa; font-size:0.9rem;">아래에서 '제목 설정' 모드를 켜고 글자를 클릭하여 제목을 정하세요.</p>
+    <p style="color:#aaa; font-size:0.9rem;">제목 설정 모드로 변경 가능합니다.</p>
+</div>
+
+<div style="text-align:right; margin-bottom:10px;">
+    <form method="POST" style="display:inline;" onsubmit="return confirm('현재 내용을 문단(빈 줄) 단위로 쪼개시겠습니까?');">
+        <input type="hidden" name="title" value="{{ title }}">
+        <button type="submit" name="split_action" value="split" class="btn-action btn-split">
+            ✂️ 문단별 나누기
+        </button>
+    </form>
 </div>
 
 <div class="maker-box">
     <div style="display:flex; justify-content:center; gap:10px; margin-bottom:15px;">
-        <button type="button" class="btn-action btn-mode active" id="btn-blank" onclick="setMode('blank')" style="background:#c0392b;">
-            🟥 빈칸 뚫기
-        </button>
-        <button type="button" class="btn-action btn-mode" id="btn-title" onclick="setMode('title')" style="background:#2980b9;">
-            👑 제목 설정
-        </button>
-        <button type="button" class="btn-action btn-switch" onclick="switchTextMode()" style="background:#e67e22;">
-            📝 글수정
-        </button>
+        <button type="button" class="btn-action btn-mode active" id="btn-blank" onclick="setMode('blank')" style="background:#c0392b;">🟥 빈칸 뚫기</button>
+        <button type="button" class="btn-action btn-mode" id="btn-title" onclick="setMode('title')" style="background:#2980b9;">👑 제목 설정</button>
+        <button type="button" class="btn-action btn-switch" onclick="switchTextMode()" style="background:#e67e22;">📝 글수정</button>
     </div>
 
     <div id="text-mode" style="display:none;">
@@ -98,7 +87,7 @@
     const displayTitle = document.getElementById('display-title');
     
     let tokens = [];
-    let currentMode = 'blank'; // 'blank' or 'title'
+    let currentMode = 'blank'; 
 
     initTokens(textArea.value);
 
@@ -147,7 +136,6 @@
             }
             else {
                 let noun = part; 
-                // 조사 분리 로직 생략 (단순화)
                 tokens.push({ text: noun, type: 'word', selected: false, isTitle: false });
                 html += `<span class="token" id="t-${idx}" onclick="toggle(${idx})">${noun}</span>`;
                 idx++;
@@ -159,31 +147,20 @@
     function toggle(idx) {
         const t = tokens[idx];
         const el = document.getElementById(`t-${idx}`);
-        
         if (t.type === 'space') return;
 
         if (currentMode === 'blank') {
-            // 빈칸 모드: 선택 토글
             t.selected = !t.selected;
             if (t.selected) {
                 el.classList.add('selected');
-                // 빈칸이 되면 제목 속성은 해제 (중복 방지)
-                t.isTitle = false;
-                el.classList.remove('title-word');
-            } else {
-                el.classList.remove('selected');
-            }
+                t.isTitle = false; el.classList.remove('title-word');
+            } else el.classList.remove('selected');
         } else {
-            // 제목 모드: 제목 토글
             t.isTitle = !t.isTitle;
             if (t.isTitle) {
                 el.classList.add('title-word');
-                // 제목이 되면 빈칸 속성은 해제
-                t.selected = false;
-                el.classList.remove('selected');
-            } else {
-                el.classList.remove('title-word');
-            }
+                t.selected = false; el.classList.remove('selected');
+            } else el.classList.remove('title-word');
             updateTitlePreview();
         }
     }
@@ -202,10 +179,7 @@
             t.selected = false;
             t.isTitle = false;
             const el = document.getElementById(`t-${i}`);
-            if (el) {
-                el.classList.remove('selected');
-                el.classList.remove('title-word');
-            }
+            if (el) { el.classList.remove('selected'); el.classList.remove('title-word'); }
         });
     }
 
