@@ -40,16 +40,13 @@ class GoogleSheetManager:
         self.USER_HEADERS = ["user_id", "password", "level", "xp", "title", "last_idx", "points", "nickname"]
         self.QUEST_HEADERS = ["quest_name", "content", "creator", "date"]
         self.COLLECTION_HEADERS = ["user_id", "card_text", "grade", "date", "quest_name", "level", "type"]
-        self.ABBREV_HEADERS = ["user_id", "term", "meaning", "date"]
+        self.ABBREV_HEADERS = ["user_id", "quest_name", "mnemonic", "date"]
         self.connect_db() 
 
     def connect_db(self):
         try:
             json_creds = os.environ.get('GCP_CREDENTIALS')
-            if not json_creds: 
-                print("❌ GCP_CREDENTIALS 환경변수 없음")
-                return False
-            
+            if not json_creds: return False
             creds_dict = json.loads(json_creds)
             scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
@@ -200,6 +197,35 @@ class GoogleSheetManager:
             return True
         except: return False
 
+    # [신규] 제목 수정 기능 (모든 연관 데이터 업데이트)
+    def rename_quest(self, old_name, new_name):
+        if not self.ensure_connection(): return False
+        try:
+            # 1. 퀘스트 목록 수정
+            q_cell = self.quests_ws.find(old_name, in_column=1)
+            if q_cell: self.quests_ws.update_cell(q_cell.row, 1, new_name)
+            else: return False
+
+            # 2. 내 학습 기록(Collections) 수정
+            # (대량 업데이트를 피하기 위해, 찾는 대로 하나씩 수정 - 시트 부하 고려)
+            try:
+                col_cells = self.collections_ws.findall(old_name, in_column=5) # 5번째 열이 quest_name
+                for cell in col_cells:
+                    self.collections_ws.update_cell(cell.row, 5, new_name)
+            except: pass
+
+            # 3. 약어 목록(Abbreviations) 수정
+            try:
+                abb_cells = self.abbrev_ws.findall(old_name, in_column=2) # 2번째 열이 quest_name
+                for cell in abb_cells:
+                    self.abbrev_ws.update_cell(cell.row, 2, new_name)
+            except: pass
+            
+            return True
+        except Exception as e:
+            print(f"Rename Error: {e}")
+            return False
+
     def get_quest_list(self):
         if not self.ensure_connection(): return []
         return self.get_safe_records(self.quests_ws)
@@ -225,7 +251,6 @@ class GoogleSheetManager:
 
     def process_result(self, user_id, row_idx, quest_name, content, mode):
         if not self.ensure_connection(): return 0, 0
-        
         try:
             user_data, fresh_row_idx = self.get_user_by_id(user_id)
             if not user_data:
@@ -242,7 +267,6 @@ class GoogleSheetManager:
                     found_idx = i + 2; current_level = int(row.get('level') or 0); break
             
             xp_gain = 0
-            
             try:
                 if found_idx == -1: 
                     grade = "RARE" if mode == 'abbrev' else "NORMAL"
@@ -273,7 +297,6 @@ class GoogleSheetManager:
                 self.users_ws.update_cell(fresh_row_idx, 4, new_xp)
 
             return u_lv, new_xp
-            
         except Exception as e:
             print(f"Process Result Error: {e}")
             raise e
@@ -355,7 +378,6 @@ def lobby():
     if user: session['level'] = user['level']; session['xp'] = user['xp']; session['nickname'] = user['nickname']; session['points'] = user['points']
     return render_template('lobby.html', level=session['level'], xp=session['xp'], points=session['points'], nickname=session['nickname'], req_xp=session['level']*100)
 
-# [추가] 로그아웃 라우트
 @app.route('/logout')
 def logout():
     session.clear()
@@ -369,6 +391,14 @@ def zone_generate():
             if 'delete_group' in request.form:
                 gm.delete_quest_group(request.form['delete_group'])
                 flash("삭제되었습니다.")
+            # [추가] 제목 수정 처리
+            elif 'rename_old' in request.form:
+                old = request.form['rename_old']
+                new = request.form['rename_new']
+                if gm.rename_quest(old, new):
+                    flash("제목 수정 완료!")
+                else:
+                    flash("수정 실패 (존재하지 않거나 DB 오류)")
             elif 'new_q_file' in request.files:
                 f = request.files['new_q_file']
                 ok, cnt = gm.save_split_quests(request.form['new_q_name'], f, session['user_id'])
@@ -396,7 +426,8 @@ def maker():
         q_name = request.form['title']
         content = request.form['final_content']
         if gm.update_quest_content(q_name, content):
-            flash("수정되었습니다!")
+            # [메시지 수정]
+            flash("생성완료.")
             return redirect(url_for('zone_generate'))
         else:
             flash("저장 실패")
@@ -531,7 +562,13 @@ def play_game():
             lv, xp = gm.process_result(session['user_id'], session.get('user_row_idx'), game['quest_name'], clean, game['mode'])
             
             session['level'] = lv; session['xp'] = xp
-            flash(f"학습 완료! (현재 Lv.{lv})")
+            
+            # [메시지 수정]
+            if game['mode'] == 'acquire':
+                flash("획득완료")
+            else:
+                flash(f"학습 완료! (현재 Lv.{lv})")
+            
             return_zone = 'review' if game['mode'] == 'review' else ('abbrev' if game['mode'] == 'abbrev' else 'acquire')
             return redirect(url_for(f"zone_{return_zone}"))
         except Exception as e:
