@@ -13,7 +13,7 @@
         font-family: 'Noto Sans KR'; margin-bottom: 15px;
     }
     
-    /* [수정됨] 토큰 스타일 */
+    /* 토큰 (클릭 가능한 글자) */
     .token {
         cursor: pointer; 
         padding: 0 1px;
@@ -23,11 +23,11 @@
         border-bottom: 2px solid transparent; 
         transition: 0.1s;
         color: #ecf0f1; 
-        user-select: none; /* 클릭 시 텍스트 드래그 방지 */
+        user-select: none;
     }
     .token:hover { background: rgba(52, 152, 219, 0.3); border-bottom-color: #3498db; }
     
-    /* 선택된 빈칸 스타일 */
+    /* 선택된 빈칸 (빨강) */
     .token.selected { 
         background: #c0392b; color: white; font-weight: 500; border-radius: 3px; border-bottom-color: #e74c3c;
     }
@@ -90,7 +90,7 @@
     const editorArea = document.getElementById('editor-area');
     let tokens = [];
 
-    // 조사 목록 (분리용)
+    // 조사 목록 (자동 분리용)
     const particles = [
         '으로서', '으로써', '에서도', '에서는', '에게는', '까지도', '부터는', '에게서', '으로는', '하라고', '한다고', '이라는', '이라고', '이나마', '이라도', '야말로', '께서는', 
         '에서는', '에게는', '으로는', '으로부터', '에서부터',
@@ -98,7 +98,7 @@
         '은', '는', '이', '가', '을', '를', '에', '의', '와', '과', '로', '도', '만', '께', '랑', '며', '고', '라', '요', '서', '여'
     ];
 
-    // 페이지 로드 시 초기화
+    // 페이지 로드 시 실행
     initTokens(textArea.value);
 
     function switchMode() {
@@ -114,44 +114,45 @@
     }
 
     function initTokens(text) {
-        // [강력한 분리 정규식]
+        // [강력해진 분리 정규식]
         // 1. {빈칸} 덩어리
         // 2. 공백 (\s+)
-        // 3. 특수문자 개별 분리 (온점, 반점, 따옴표, 괄호 등 모든 기호)
-        const parts = text.split(/(\{.+?\}|\s+|[.,·•;:\(\)\[\]"'\?!~%])/g);
+        // 3. [핵심] 한글, 영어, 숫자, 언더바(_)가 "아닌" 모든 문자 ([^\w가-힣])
+        //    -> 따옴표, 괄호, 점, 쉼표 등 모든 기호가 낱개로 분리됩니다.
+        const parts = text.split(/(\{.+?\}|\s+|[^\w가-힣])/g);
         
         let html = '';
         tokens = [];
         let idx = 0;
 
         parts.forEach(part => {
-            if (!part || part === '') return; // 빈 문자열 무시
+            if (!part || part === '') return;
             
-            // 1. 공백 처리 (클릭 불가)
+            // 1. 공백
             if (/^\s+$/.test(part)) {
                 html += part.replace(/\n/g, '<br>').replace(/ /g, '<span class="space-token"> </span>');
                 tokens.push({ text: part, type: 'space', selected: false });
                 idx++;
             } 
-            // 2. 이미 {빈칸}인 경우 (클릭 가능, 이미 선택됨)
+            // 2. 이미 {빈칸}인 경우
             else if (part.startsWith('{') && part.endsWith('}')) {
                 const core = part.slice(1, -1);
                 tokens.push({ text: core, type: 'word', selected: true });
                 html += `<span class="token selected" id="t-${idx}" onclick="toggle(${idx})">${core}</span>`;
                 idx++;
             }
-            // 3. 특수문자인 경우 (클릭 가능하도록 'word'로 취급하되 분리됨)
-            else if (/^[.,·•;:\(\)\[\]"'\?!~%]$/.test(part)) {
+            // 3. 특수기호 (한글/영문/숫자가 아닌 것) -> 별도 토큰으로 분리
+            else if (/^[^\w가-힣]$/.test(part)) {
                 tokens.push({ text: part, type: 'word', selected: false });
                 html += `<span class="token" id="t-${idx}" onclick="toggle(${idx})">${part}</span>`;
                 idx++;
             }
-            // 4. 일반 단어 -> 조사 분리 로직
+            // 4. 일반 단어 -> 조사 분리 시도
             else {
                 let noun = part;
                 let particle = "";
 
-                // 조사 분리 시도
+                // 조사 분리
                 for (let p of particles) {
                     if (noun.endsWith(p) && noun.length > p.length) {
                         particle = p;
@@ -160,12 +161,12 @@
                     }
                 }
 
-                // 명사 부분 (클릭 가능)
+                // 명사 부분
                 tokens.push({ text: noun, type: 'word', selected: false });
                 html += `<span class="token" id="t-${idx}" onclick="toggle(${idx})">${noun}</span>`;
                 idx++;
 
-                // 조사 부분 (클릭 가능)
+                // 조사 부분 (별도 토큰)
                 if (particle) {
                     tokens.push({ text: particle, type: 'word', selected: false });
                     html += `<span class="token" id="t-${idx}" onclick="toggle(${idx})">${particle}</span>`;
@@ -178,11 +179,9 @@
 
     function toggle(idx) {
         const t = tokens[idx];
+        if (t.type === 'space') return; // 공백은 클릭 안됨
         
-        // 공백은 클릭 안됨
-        if (t.type === 'space') return;
-        
-        // 상태 반전 (On <-> Off)
+        // 토글 (On <-> Off)
         t.selected = !t.selected;
         
         const el = document.getElementById(`t-${idx}`);
@@ -190,10 +189,8 @@
         else el.classList.remove('selected');
     }
 
-    // 전체 초기화 (선택 해제)
     function resetAll() {
         if(!confirm("모든 빈칸 설정을 초기화하시겠습니까?")) return;
-        
         tokens.forEach((t, i) => {
             if (t.selected) {
                 t.selected = false;
@@ -203,7 +200,6 @@
         });
     }
 
-    // 텍스트 재조립 ({빈칸} 형식으로 변환)
     function constructText() {
         return tokens.map(t => {
             if (t.type !== 'space' && t.selected) return `{${t.text}}`;
