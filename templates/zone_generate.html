@@ -50,7 +50,7 @@
 
                 {% for item in items %}
                 <div style="padding:10px; border-bottom:1px solid #555;">
-                    <div id="disp-{{ loop.index }}" style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
                         <span style="color:#ecf0f1; font-size:0.95rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:10px; flex:1;">
                             {% if item.get('quest_name') in my_completed %}
                                 <span style="color:#2ecc71; font-weight:bold;">[✅ 획득완료]</span>
@@ -59,25 +59,12 @@
                         </span>
                         
                         <div>
-                            <button type="button" onclick="toggleEdit('{{ loop.index }}')" style="background:#95a5a6; color:white; border:none; padding:5px 8px; border-radius:5px; cursor:pointer; font-size:0.8rem; margin-right:5px;">
-                                ✏️이름변경
-                            </button>
                             <a href="/maker?quest_name={{ item.get('quest_name') }}" style="text-decoration:none;">
                                 <button style="background:#2ecc71; color:white; border:none; padding:5px 12px; border-radius:5px; cursor:pointer; font-size:0.9rem;">
-                                    📝 빈칸
+                                    📝 수정/빈칸
                                 </button>
                             </a>
                         </div>
-                    </div>
-
-                    <div id="edit-{{ loop.index }}" style="display:none; margin-top:5px; background:#222; padding:10px; border-radius:5px;">
-                        <form method="POST" style="display:flex; gap:5px;">
-                            <input type="hidden" name="rename_old" value="{{ item.get('quest_name') }}">
-                            <input type="text" name="rename_new" value="{{ item.get('quest_name') }}" 
-                                   style="flex:1; padding:5px; border:1px solid #555; background:#333; color:white; border-radius:3px;">
-                            <button type="submit" style="background:#3498db; border:none; color:white; padding:5px 10px; border-radius:3px; cursor:pointer;">저장</button>
-                            <button type="button" onclick="toggleEdit('{{ loop.index }}')" style="background:#e74c3c; border:none; color:white; padding:5px 10px; border-radius:3px; cursor:pointer;">취소</button>
-                        </form>
                     </div>
                 </div>
                 {% endfor %}
@@ -86,18 +73,4 @@
         {% endfor %}
     {% endif %}
 </div>
-
-<script>
-    function toggleEdit(id) {
-        const disp = document.getElementById('disp-' + id);
-        const edit = document.getElementById('edit-' + id);
-        if (edit.style.display === 'none') {
-            edit.style.display = 'block';
-            disp.style.display = 'none';
-        } else {
-            edit.style.display = 'none';
-            disp.style.display = 'flex';
-        }
-    }
-</script>
 {% endblock %}
