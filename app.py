@@ -46,7 +46,10 @@ class GoogleSheetManager:
     def connect_db(self):
         try:
             json_creds = os.environ.get('GCP_CREDENTIALS')
-            if not json_creds: return False
+            if not json_creds: 
+                print("❌ GCP_CREDENTIALS 환경변수 없음")
+                return False
+            
             creds_dict = json.loads(json_creds)
             scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
@@ -197,28 +200,21 @@ class GoogleSheetManager:
             return True
         except: return False
 
-    # [신규] 제목 수정 기능 (모든 연관 데이터 업데이트)
     def rename_quest(self, old_name, new_name):
         if not self.ensure_connection(): return False
         try:
-            # 1. 퀘스트 목록 수정
             q_cell = self.quests_ws.find(old_name, in_column=1)
             if q_cell: self.quests_ws.update_cell(q_cell.row, 1, new_name)
             else: return False
 
-            # 2. 내 학습 기록(Collections) 수정
-            # (대량 업데이트를 피하기 위해, 찾는 대로 하나씩 수정 - 시트 부하 고려)
             try:
-                col_cells = self.collections_ws.findall(old_name, in_column=5) # 5번째 열이 quest_name
-                for cell in col_cells:
-                    self.collections_ws.update_cell(cell.row, 5, new_name)
+                col_cells = self.collections_ws.findall(old_name, in_column=5) 
+                for cell in col_cells: self.collections_ws.update_cell(cell.row, 5, new_name)
             except: pass
 
-            # 3. 약어 목록(Abbreviations) 수정
             try:
-                abb_cells = self.abbrev_ws.findall(old_name, in_column=2) # 2번째 열이 quest_name
-                for cell in abb_cells:
-                    self.abbrev_ws.update_cell(cell.row, 2, new_name)
+                abb_cells = self.abbrev_ws.findall(old_name, in_column=2) 
+                for cell in abb_cells: self.abbrev_ws.update_cell(cell.row, 2, new_name)
             except: pass
             
             return True
@@ -346,6 +342,41 @@ class GoogleSheetManager:
                 self.abbrev_ws.delete_rows(i + 2); return True
         return False
 
+    # [신규] 유저 초기화 기능
+    def reset_user_data(self, user_id):
+        if not self.ensure_connection(): return False
+        try:
+            # 1. Collections 초기화
+            col_rows = self.collections_ws.get_all_values()
+            to_del_col = []
+            for i, row in enumerate(col_rows):
+                if i == 0: continue
+                if str(row[0]) == str(user_id):
+                    to_del_col.append(i + 1)
+            for r in sorted(to_del_col, reverse=True):
+                self.collections_ws.delete_rows(r)
+
+            # 2. Abbreviations 초기화
+            abb_rows = self.abbrev_ws.get_all_values()
+            to_del_abb = []
+            for i, row in enumerate(abb_rows):
+                if i == 0: continue
+                if str(row[0]) == str(user_id):
+                    to_del_abb.append(i + 1)
+            for r in sorted(to_del_abb, reverse=True):
+                self.abbrev_ws.delete_rows(r)
+
+            # 3. User Stats 초기화
+            cell = self.users_ws.find(user_id, in_column=1)
+            if cell:
+                self.users_ws.update_cell(cell.row, 3, 1) # Level -> 1
+                self.users_ws.update_cell(cell.row, 4, 0) # XP -> 0
+            
+            return True
+        except Exception as e:
+            print(f"Reset Error: {e}")
+            return False
+
 gm = GoogleSheetManager()
 
 @app.route('/')
@@ -383,6 +414,18 @@ def logout():
     session.clear()
     return redirect(url_for('index'))
 
+# [신규] 초기화 라우트
+@app.route('/reset_progress', methods=['POST'])
+def reset_progress():
+    if 'user_id' not in session: return redirect(url_for('index'))
+    if gm.reset_user_data(session['user_id']):
+        session['level'] = 1
+        session['xp'] = 0
+        flash("모든 학습 내용이 초기화되었습니다.")
+    else:
+        flash("초기화 실패. 잠시 후 다시 시도해주세요.")
+    return redirect(url_for('lobby'))
+
 @app.route('/zone/generate', methods=['GET', 'POST'])
 def zone_generate():
     if 'user_id' not in session: return redirect(url_for('index'))
@@ -391,14 +434,11 @@ def zone_generate():
             if 'delete_group' in request.form:
                 gm.delete_quest_group(request.form['delete_group'])
                 flash("삭제되었습니다.")
-            # [추가] 제목 수정 처리
             elif 'rename_old' in request.form:
                 old = request.form['rename_old']
                 new = request.form['rename_new']
-                if gm.rename_quest(old, new):
-                    flash("제목 수정 완료!")
-                else:
-                    flash("수정 실패 (존재하지 않거나 DB 오류)")
+                if gm.rename_quest(old, new): flash("제목 수정 완료!")
+                else: flash("수정 실패 (존재하지 않거나 DB 오류)")
             elif 'new_q_file' in request.files:
                 f = request.files['new_q_file']
                 ok, cnt = gm.save_split_quests(request.form['new_q_name'], f, session['user_id'])
@@ -426,7 +466,6 @@ def maker():
         q_name = request.form['title']
         content = request.form['final_content']
         if gm.update_quest_content(q_name, content):
-            # [메시지 수정]
             flash("생성완료.")
             return redirect(url_for('zone_generate'))
         else:
@@ -563,7 +602,6 @@ def play_game():
             
             session['level'] = lv; session['xp'] = xp
             
-            # [메시지 수정]
             if game['mode'] == 'acquire':
                 flash("획득완료")
             else:
