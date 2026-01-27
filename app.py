@@ -474,10 +474,6 @@ def zone_generate():
             if 'delete_group' in request.form:
                 gm.delete_quest_group(request.form['delete_group'])
                 flash("삭제되었습니다.")
-            elif 'rename_old' in request.form:
-                old = request.form['rename_old']; new = request.form['rename_new']
-                if gm.rename_quest(old, new): flash("제목 수정 완료!")
-                else: flash("수정 실패 (존재하지 않거나 DB 오류)")
             elif 'new_q_file' in request.files:
                 f = request.files['new_q_file']
                 ok, cnt = gm.save_split_quests(request.form['new_q_name'], f, session['user_id'])
@@ -502,13 +498,23 @@ def maker():
         if not quest: return redirect(url_for('zone_generate'))
         return render_template('maker.html', raw_text=quest['content'], title=q_name)
     elif request.method == 'POST':
-        q_name = request.form['title']; content = request.form['final_content']
-        if gm.update_quest_content(q_name, content):
+        old_title = request.form.get('old_title')
+        new_title = request.form.get('title')
+        content = request.form['final_content']
+        
+        # [신규] 제목 변경 로직 통합
+        if old_title and new_title and old_title != new_title:
+            gm.rename_quest(old_title, new_title)
+            current_title = new_title
+        else:
+            current_title = old_title if old_title else new_title
+
+        if gm.update_quest_content(current_title, content):
             flash("생성완료.")
             return redirect(url_for('zone_generate'))
         else:
             flash("저장 실패")
-            return redirect(url_for('maker', quest_name=q_name))
+            return redirect(url_for('maker', quest_name=current_title))
 
 @app.route('/zone/acquire', methods=['GET', 'POST'])
 def zone_acquire():
@@ -535,14 +541,21 @@ def zone_review():
             q_type = request.form.get('quest_type', 'BLANK')
             cards = gm.get_available_quests(session['user_id'], 'review')
             card = next((c for c in cards if c.get('quest_name') == q_name and c.get('type') == q_type), None)
+            
             if card:
                 mode = 'abbrev' if q_type == 'ABBREV' else 'review'
                 level = int(card.get('level', 1))
-                if level == 5: mode = 'register_mnemonic'
+                if level == 5:
+                    mode = 'register_mnemonic'
+
                 ACTIVE_GAMES[session['user_id']] = { 
-                    'mode': mode, 'quest_name': q_name, 'content': card['card_text'], 'level': level
+                    'mode': mode, 
+                    'quest_name': q_name, 
+                    'content': card['card_text'],
+                    'level': level
                 }
                 return redirect(url_for('play_game'))
+                
         cards = gm.get_available_quests(session['user_id'], 'review')
         return render_template('zone_list.html', title="복습 구역", quests=cards, mode='review')
     except Exception as e:
@@ -556,13 +569,18 @@ def zone_abbrev():
             q_name = request.form['quest_name']
             cards = gm.get_available_quests(session['user_id'], 'abbrev')
             card = next((c for c in cards if c.get('quest_name') == q_name), None)
+            
             if card:
                 mnemonic = gm.get_mnemonic(session['user_id'], q_name)
                 ACTIVE_GAMES[session['user_id']] = { 
-                    'mode': 'abbrev', 'quest_name': q_name, 'content': card['card_text'],
-                    'level': int(card.get('level', 1)), 'mnemonic': mnemonic
+                    'mode': 'abbrev', 
+                    'quest_name': q_name, 
+                    'content': card['card_text'],
+                    'level': int(card.get('level', 1)),
+                    'mnemonic': mnemonic
                 }
                 return redirect(url_for('play_game'))
+                
         cards = gm.get_available_quests(session['user_id'], 'abbrev')
         return render_template('zone_list.html', title="약어 훈련소", quests=cards, mode='abbrev')
     except Exception as e:
@@ -571,6 +589,7 @@ def zone_abbrev():
 @app.route('/play', methods=['GET', 'POST'])
 def play_game():
     if 'user_id' not in session: return redirect(url_for('index'))
+    
     game = ACTIVE_GAMES.get(session['user_id'])
     if not game: return redirect(url_for('lobby'))
 
@@ -581,18 +600,14 @@ def play_game():
         parts = []
         targets = []
         
-        # [모드 1] 약어 등록 모드 (Lv 5)
         if game['mode'] == 'register_mnemonic':
-            # [수정] 원본 텍스트(빈칸 채워진 상태)를 보여주기 위해 정규식으로 {} 제거
             clean_text = re.sub(r'\{([^}]+)\}', r'\1', content)
-            # parts에 'box_content'라는 새로운 타입을 추가하여 play.html에서 렌더링하도록 함
             parts = [
                 {'type':'text', 'val': '이 카드의 약어(두문자)를 만드세요.<br>예: 예방 진단 치료 재활 -> 예단치재'},
                 {'type':'box_content', 'val': clean_text}
             ]
             targets = []
 
-        # [모드 2] 약어 테스트 모드 (약어 구역)
         elif game['mode'] == 'abbrev':
             clean = re.sub(r'\{([^}]+)\}', r'\1', content)
             mnemonic_target = game.get('mnemonic', '약어없음')
@@ -602,7 +617,6 @@ def play_game():
             ]
             targets = [clean.strip()] 
             
-        # [모드 3] 일반 복습 / 획득 (Lv 1~4)
         else:
             last = 0; idx = 0
             for m in re.finditer(r'\{([^}]+)\}', content):
@@ -633,10 +647,13 @@ def play_game():
             if game['mode'] != 'abbrev': clean = re.sub(r'\{([^}]+)\}', r'\1', game['content'])
             
             lv, xp = gm.process_result(session['user_id'], session.get('user_row_idx'), game['quest_name'], clean, game['mode'])
+            
             session['level'] = lv; session['xp'] = xp
             
-            if game['mode'] == 'acquire': flash("획득완료")
-            else: flash(f"학습 완료! (현재 Lv.{lv})")
+            if game['mode'] == 'acquire':
+                flash("획득완료")
+            else:
+                flash(f"학습 완료! (현재 Lv.{lv})")
             
             return_zone = 'review' if game['mode'] == 'review' else ('abbrev' if game['mode'] == 'abbrev' else 'acquire')
             return redirect(url_for(f"zone_{return_zone}"))
