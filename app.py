@@ -125,7 +125,6 @@ class GoogleSheetManager:
             except: return False
         return False
 
-    # [핵심 수정] HTML 3단 비교 파일 파싱 지원
     def save_split_quests(self, title_prefix, file_obj, creator):
         if not self.ensure_connection(): return False, 0
         try:
@@ -137,14 +136,11 @@ class GoogleSheetManager:
             file_obj.seek(0)
             raw_data = file_obj.read()
             
-            # 인코딩 감지 시도
             try: raw_text = raw_data.decode('utf-8')
             except: raw_text = raw_data.decode('cp949', errors='ignore')
 
-            # --- [HTML 3단 비교 파싱 로직] ---
+            # [HTML 파싱 로직]
             if filename.endswith('.html') or '<html' in raw_text[:100].lower():
-                # 1. 3단 비교 테이블의 행(tr)을 찾습니다.
-                # 정규식으로 <tr>...</tr> 블록을 찾음 (단순화된 파싱)
                 tr_pattern = re.compile(r'<tr[^>]*>(.*?)</tr>', re.DOTALL | re.IGNORECASE)
                 td_pattern = re.compile(r'<td[^>]*>(.*?)</td>', re.DOTALL | re.IGNORECASE)
                 
@@ -152,62 +148,56 @@ class GoogleSheetManager:
                 
                 for row_content in rows:
                     cols = td_pattern.findall(row_content)
-                    # 3단 구조인 경우만 처리 (법, 령, 규칙)
                     if len(cols) >= 3:
-                        prefixes = ['제', '령', '규'] # 왼쪽부터 순서대로
+                        prefixes = ['제', '령', '규']
                         
                         for i in range(3):
                             col_html = cols[i]
-                            # 제목 추출 (class="bl" 인 span 찾기)
                             title_match = re.search(r'<span[^>]*class="bl"[^>]*>(.*?)</span>', col_html)
                             
                             if title_match:
-                                # 제목이 있으면 카드 생성 대상
                                 raw_title = title_match.group(1).strip()
-                                # HTML 태그 제거
                                 clean_title = re.sub(r'<[^>]+>', '', raw_title).strip()
+                                clean_content = re.sub(r'<[^>]+>', '\n', col_html)
+                                clean_content = re.sub(r'\n+', '\n', clean_content).strip()
                                 
-                                # 내용 추출 (HTML 태그 모두 제거 후 텍스트만)
-                                clean_content = re.sub(r'<[^>]+>', '\n', col_html) # 태그를 줄바꿈으로
-                                clean_content = re.sub(r'\n+', '\n', clean_content).strip() # 중복 줄바꿈 제거
-                                
-                                # 카드 이름: 접두어(제/령/규) - 법령제목 - 조문번호
-                                # 예: 제-국민건강보험법-제1조(목적)
                                 final_title = f"{prefixes[i]}-{title_prefix}-{clean_title}"
                                 
-                                # 중복 방지
                                 dup_count = 0; temp_name = final_title
                                 while any(r[0] == temp_name for r in rows_to_add) or temp_name in existing:
                                     dup_count += 1; temp_name = f"{final_title}_{dup_count}"
                                 
                                 rows_to_add.append([temp_name, clean_content, creator, today])
 
-            # --- [기존 TXT/CSV 처리 로직] ---
+            # [핵심 수정] 텍스트 파일 자동 분류 로직
             else:
                 f_stream = StringIO(raw_text)
-                if '\t' in raw_text:
-                    reader = csv.reader(f_stream, delimiter='\t')
-                    for row in reader:
-                        if not row or len(row) < 2: continue
-                        text = row[0]
-                        snippet = text.split('\n')[0][:15].replace(" ", "")
-                        q_name = f"{title_prefix}-{snippet}"
-                        rows_to_add.append([q_name, text, creator, today])
-                else:
-                    normalized_text = raw_text.replace('\r\n', '\n')
-                    blocks = re.split(r'\n\s*\n', normalized_text)
-                    for block in blocks:
-                        clean_block = block.strip()
-                        if not clean_block: continue
-                        first_line = clean_block.split('\n')[0]
-                        snippet = first_line[:15].replace(" ", "").replace('/', '')
-                        q_name = f"{title_prefix}-{snippet}"
-                        
-                        dup_count = 0; temp_name = q_name
-                        while any(r[0] == temp_name for r in rows_to_add) or temp_name in existing:
-                            dup_count += 1; temp_name = f"{q_name}_{dup_count}"
-                        
-                        rows_to_add.append([temp_name, clean_block, creator, today])
+                normalized_text = raw_text.replace('\r\n', '\n')
+                
+                # 법령 종류 자동 감지 (파일명 또는 입력된 제목 기준)
+                category_prefix = "제" # 기본값: 법
+                
+                if "시행규칙" in title_prefix:
+                    category_prefix = "규"
+                elif "시행령" in title_prefix:
+                    category_prefix = "령"
+                
+                blocks = re.split(r'\n\s*\n', normalized_text)
+                for block in blocks:
+                    clean_block = block.strip()
+                    if not clean_block: continue
+                    
+                    first_line = clean_block.split('\n')[0]
+                    snippet = first_line[:15].replace(" ", "").replace('/', '')
+                    
+                    # 제목 생성: (분류)-(파일명)-(내용요약)
+                    q_name = f"{category_prefix}-{title_prefix}-{snippet}"
+                    
+                    dup_count = 0; temp_name = q_name
+                    while any(r[0] == temp_name for r in rows_to_add) or temp_name in existing:
+                        dup_count += 1; temp_name = f"{q_name}_{dup_count}"
+                    
+                    rows_to_add.append([temp_name, clean_block, creator, today])
             
             if rows_to_add: 
                 self.quests_ws.append_rows(rows_to_add)
@@ -224,7 +214,10 @@ class GoogleSheetManager:
             records = self.get_safe_records(self.quests_ws)
             to_del = []
             for i, r in enumerate(records):
-                if str(r.get('quest_name')).startswith(prefix+"-") or str(r.get('quest_name')) == prefix:
+                # 파일명(prefix)이 포함된 모든 카드 삭제
+                # 예: prefix="형법" 이면 "제-형법-...", "령-형법-..." 모두 삭제
+                q_name = str(r.get('quest_name'))
+                if f"-{prefix}-" in q_name or q_name.startswith(f"{prefix}-"):
                     to_del.append(i + 2)
             for idx in sorted(to_del, reverse=True): self.quests_ws.delete_rows(idx)
             return True
@@ -255,10 +248,18 @@ class GoogleSheetManager:
             if not to_merge: return False
 
             combined_content = "\n\n".join([q.get('content', '') for q in to_merge])
-            base_title = to_merge[0].get('quest_name')
-            if '-' in base_title: base_prefix = base_title.split('-')[0]
-            else: base_prefix = "합본"
-            new_title = f"{base_prefix}-합본_{datetime.datetime.now().strftime('%H%M%S')}"
+            
+            # 기존 제목의 분류(제/령/규)와 파일명 유지
+            base_full_title = to_merge[0].get('quest_name')
+            parts = base_full_title.split('-')
+            
+            # 분류 접두어가 있는 경우 (제-형법-제1조)
+            if len(parts) >= 3:
+                prefix = parts[0] # 제
+                filename = parts[1] # 형법
+                new_title = f"{prefix}-{filename}-합본_{datetime.datetime.now().strftime('%H%M%S')}"
+            else:
+                new_title = f"{base_full_title}-합본_{datetime.datetime.now().strftime('%H%M%S')}"
             
             self.quests_ws.append_row([new_title, combined_content, creator, str(datetime.date.today())])
             
@@ -282,8 +283,12 @@ class GoogleSheetManager:
 
             rows_to_add = []
             today = str(datetime.date.today())
-            base_name = quest_name.split('_')[0]
             
+            # 기존 제목 구조 유지 (제-형법-제1조 -> 제-형법-제1조_part1)
+            base_name = quest_name
+            if '_' in base_name and 'part' in base_name:
+                base_name = base_name.rsplit('_', 1)[0] # 이미 part가 있으면 제거 후 다시 붙임
+
             for idx, block in enumerate(blocks):
                 new_name = f"{base_name}_part{idx+1}"
                 rows_to_add.append([new_name, block, creator, today])
