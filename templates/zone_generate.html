@@ -1,54 +1,32 @@
 {% extends "layout.html" %}
 
 {% block content %}
-<style>
-    /* 3단 레이아웃 스타일 */
-    .law-board {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        gap: 15px;
-        margin-top: 10px;
-    }
+
+{% macro card_block(item, my_completed) %}
+<div class="card-item">
+    <div style="display:flex; align-items:center; flex:1; overflow:hidden;">
+        <input type="checkbox" name="merge_targets" value="{{ item.get('quest_name') }}" style="margin-right:10px; cursor:pointer; transform:scale(1.2);">
+        
+        <span style="color:#ecf0f1; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:default;" title="{{ item.get('quest_name') }}">
+            {% if item.get('quest_name') in my_completed %}
+                <span style="color:#2ecc71; margin-right:3px;">✅</span>
+            {% elif '{' in item.get('content', '') %}
+                <span style="color:#3498db; margin-right:3px;">🔨</span>
+            {% endif %}
+            
+            {{ item.get('quest_name', '').split('-')[-1] }}
+        </span>
+    </div>
     
-    .law-column {
-        background: #253342;
-        padding: 10px;
-        border-radius: 8px;
-        border: 1px solid #34495e;
-    }
+    <div style="display:flex; gap:5px; margin-left:5px;">
+        <button type="submit" name="delete_single" value="{{ item.get('quest_name') }}" style="background:none; border:none; cursor:pointer; font-size:1rem; padding:0;" onclick="return confirm('이 카드를 삭제하시겠습니까?');">🗑️</button>
+        <a href="/maker?quest_name={{ item.get('quest_name') }}" style="text-decoration:none;">
+            <button type="button" style="background:#2ecc71; color:white; border:none; padding:3px 8px; border-radius:3px; cursor:pointer; font-size:0.8rem;">📝</button>
+        </a>
+    </div>
+</div>
+{% endmacro %}
 
-    .law-column h4 {
-        text-align: center;
-        margin: 0 0 10px 0;
-        padding-bottom: 5px;
-        border-bottom: 2px solid #555;
-        font-size: 1rem;
-    }
-
-    /* 법/령/규 색상 구분 */
-    .col-law h4 { color: #3498db; border-color: #3498db; }
-    .col-decree h4 { color: #e67e22; border-color: #e67e22; }
-    .col-rule h4 { color: #2ecc71; border-color: #2ecc71; }
-
-    .card-item {
-        background: #34495e;
-        padding: 10px;
-        margin-bottom: 8px;
-        border-radius: 5px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border: 1px solid #444;
-        transition: 0.2s;
-    }
-    .card-item:hover { border-color: #f39c12; }
-
-    /* 모바일 최적화: 1단으로 변경 */
-    @media (max-width: 768px) {
-        .law-board { grid-template-columns: 1fr; }
-        .law-column { margin-bottom: 15px; }
-    }
-</style>
 
 <h1>🏭 빈칸 카드 생성소</h1>
 <p style="color:#aaa; text-align:center;">업로드한 법령을 수정하거나 빈칸을 만드세요.</p>
@@ -151,29 +129,51 @@
     {% endif %}
 </form>
 
-{% macro card_block(item, my_completed) %}
-<div class="card-item">
-    <div style="display:flex; align-items:center; flex:1; overflow:hidden;">
-        <input type="checkbox" name="merge_targets" value="{{ item.get('quest_name') }}" style="margin-right:10px; cursor:pointer;">
-        
-        <span style="color:#ecf0f1; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-            {% if item.get('quest_name') in my_completed %}
-                <span style="color:#2ecc71;">✅</span>
-            {% elif '{' in item.get('content', '') %}
-                <span style="color:#3498db;">🔨</span>
-            {% endif %}
-            
-            {{ item.get('quest_name', '').split('-')[-1] }}
-        </span>
-    </div>
+<style>
+    /* 3단 레이아웃 스타일 */
+    .law-board {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 15px;
+        margin-top: 10px;
+    }
     
-    <div style="display:flex; gap:3px;">
-        <button type="submit" name="delete_single" value="{{ item.get('quest_name') }}" style="background:none; border:none; cursor:pointer; font-size:1rem;" onclick="return confirm('삭제하시겠습니까?');">🗑️</button>
-        <a href="/maker?quest_name={{ item.get('quest_name') }}" style="text-decoration:none;">
-            <button type="button" style="background:#2ecc71; color:white; border:none; padding:3px 8px; border-radius:3px; cursor:pointer; font-size:0.8rem;">📝</button>
-        </a>
-    </div>
-</div>
-{% endmacro %}
+    .law-column {
+        background: #253342;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #34495e;
+    }
 
+    .law-column h4 {
+        text-align: center;
+        margin: 0 0 10px 0;
+        padding-bottom: 5px;
+        border-bottom: 2px solid #555;
+        font-size: 1rem;
+    }
+
+    .col-law h4 { color: #3498db; border-color: #3498db; }
+    .col-decree h4 { color: #e67e22; border-color: #e67e22; }
+    .col-rule h4 { color: #2ecc71; border-color: #2ecc71; }
+
+    .card-item {
+        background: #34495e;
+        padding: 8px;
+        margin-bottom: 8px;
+        border-radius: 5px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border: 1px solid #444;
+        transition: 0.2s;
+    }
+    .card-item:hover { border-color: #f39c12; }
+
+    /* 모바일 최적화 */
+    @media (max-width: 768px) {
+        .law-board { grid-template-columns: 1fr; }
+        .law-column { margin-bottom: 15px; }
+    }
+</style>
 {% endblock %}
