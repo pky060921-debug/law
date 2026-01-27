@@ -1,90 +1,63 @@
 {% extends "layout.html" %}
-
 {% block content %}
-<style>
-    /* 카드 그리드 반응형 */
-    .card-grid {
-        display: grid;
-        /* 화면 크기에 따라 열 개수 자동 조절 */
-        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-        gap: 15px;
-        margin-top: 30px;
-    }
-    
-    .card {
-        background: #ecf0f1; color: #2c3e50; border-radius: 10px; padding: 15px;
-        text-align: center; position: relative; border-bottom: 4px solid #bdc3c7;
-        transition: transform 0.2s;
-    }
-    .card:hover { transform: translateY(-5px); }
+<h1>
+    {% if mode == 'acquire' %}📥 획득 구역
+    {% elif mode == 'review' %}🔄 복습 구역
+    {% else %}⚡ 약어 구역{% endif %}
+</h1>
+<p style="text-align:center; color:#aaa;">
+    {% if mode == 'acquire' %}아직 배우지 않은 카드들입니다.{% elif mode == 'review' %}반복할수록 카드가 강력해집니다.{% else %}첫 글자를 보고 전체를 맞추세요!{% endif %}
+</p>
 
-    .card.NORMAL { border-top: 4px solid #95a5a6; }
-    .card.RARE { border-top: 4px solid #3498db; background: #eaf2f8; }
-    .card.LEGEND { border-top: 4px solid #f1c40f; background: #fcf3cf; }
-
-    .grade-badge {
-        font-size: 0.8rem; font-weight: bold; padding: 2px 8px; border-radius: 10px;
-        display: inline-block; margin-bottom: 5px; color: white;
-    }
-    .NORMAL .grade-badge { background: #95a5a6; }
-    .RARE .grade-badge { background: #3498db; }
-    .LEGEND .grade-badge { background: #f1c40f; color: #333; }
-
-    .btn-exchange {
-        width: 100%; margin-top: 10px; padding: 8px; border: none; border-radius: 5px;
-        background: #e67e22; color: white; font-family: 'Do Hyeon'; cursor: pointer;
-    }
-
-    .my-points { text-align: right; font-size: 1.2rem; color: #f1c40f; margin-bottom: 10px; }
-
-    /* 📱 모바일 */
-    @media (max-width: 768px) {
-        .card-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-        .card { padding: 10px; }
-        .my-points { font-size: 1rem; }
-    }
-</style>
-
-<h1>🃏 카드 도감</h1>
-<div class="my-points">내 지갑: <span id="current-points">{{ points }}</span> P</div>
-
-{% if cards %}
-<div class="card-grid">
-    {% for card in cards %}
-    <div class="card {{ card.grade }}" id="card-{{ loop.index }}">
-        <span class="grade-badge">{{ card.grade }}</span>
-        <div style="font-size: 1rem; font-weight: bold; margin: 10px 0; min-height: 40px; display:flex; align-items:center; justify-content:center;">
-            {{ card.card_text }}
+<div style="margin-top:20px;">
+    {% if not quests %}
+        <div style="text-align:center; padding:50px; color:#7f8c8d;">
+            학습할 카드가 없습니다.<br>
+            (이전 단계를 먼저 완료해주세요)
         </div>
-        <div style="color: #7f8c8d; font-size: 0.8rem;">
-            보유: <b id="count-{{ loop.index }}">{{ card.count }}</b>장
+    {% endif %}
+
+    {% set groups = {} %}
+    {% for q in quests %}
+        {% set title = q.get('quest_name', '').split('-')[0] %}
+        {% if title not in groups %}{% set _ = groups.update({title: []}) %}{% endif %}
+        {% set _ = groups[title].append(q) %}
+    {% endfor %}
+
+    {% for title, items in groups.items() %}
+    <details style="margin-bottom:15px; background:#34495e; border-radius:10px; overflow:hidden;" open>
+        <summary style="padding:15px; cursor:pointer; font-weight:bold; color:#f39c12; list-style:none;">
+            📂 {{ title }} <span style="color:#bdc3c7; font-size:0.8em;">({{ items|length }}개)</span>
+        </summary>
+        <div style="background:#2c3e50; padding:10px;">
+            {% for item in items %}
+            <form method="POST" style="margin-bottom:5px;">
+                <input type="hidden" name="quest_name" value="{{ item.get('quest_name') }}">
+                <input type="hidden" name="quest_type" value="{{ item.get('type') }}"> 
+                
+                <button type="submit" style="width:100%; text-align:left; background:transparent; border:none; color:#ecf0f1; padding:12px; border-bottom:1px solid #444; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+                    <span>
+                        {% if item.get('type') == 'ABBREV' %}
+                            <span style="background:#9b59b6; color:white; padding:2px 6px; border-radius:4px; font-size:0.8rem; margin-right:5px;">약어</span>
+                        {% else %}
+                            <span style="background:#3498db; color:white; padding:2px 6px; border-radius:4px; font-size:0.8rem; margin-right:5px;">빈칸</span>
+                        {% endif %}
+                        
+                        {{ item.get('quest_name', '').split('-')[-1] }}
+                    </span>
+                    
+                    {% if mode != 'acquire' %}
+                        {% if item.get('level', 0)|int >= 5 %}
+                            <span style="color:#f1c40f; font-weight:bold;">👑 졸업/완료 (Lv.{{ item.get('level', 0) }})</span>
+                        {% else %}
+                            <span style="color:#2ecc71; font-weight:bold;">Lv.{{ item.get('level', 0) }}</span>
+                        {% endif %}
+                    {% endif %}
+                </button>
+            </form>
+            {% endfor %}
         </div>
-        <button class="btn-exchange" onclick="exchangeCard('{{ card.card_text }}', {{ loop.index }})">💰 교환</button>
-    </div>
+    </details>
     {% endfor %}
 </div>
-{% else %}
-<div style="text-align:center; padding:50px; color:#95a5a6;">획득한 카드가 없습니다.</div>
-{% endif %}
-
-<script>
-    function exchangeCard(cardText, index) {
-        if(!confirm(`'${cardText}' 카드를 포인트로 교환하시겠습니까?`)) return;
-        fetch('/exchange', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ card_text: cardText })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert(`+${data.earned} P 획득!`);
-                document.getElementById('current-points').innerText = data.new_total;
-                const countEl = document.getElementById(`count-${index}`);
-                let cnt = parseInt(countEl.innerText) - 1;
-                if (cnt <= 0) document.getElementById(`card-${index}`).remove();
-                else countEl.innerText = cnt;
-            } else { alert('실패: ' + data.msg); }
-        });
-    }
-</script>
 {% endblock %}
