@@ -139,64 +139,47 @@ class GoogleSheetManager:
             try: raw_text = raw_data.decode('utf-8')
             except: raw_text = raw_data.decode('cp949', errors='ignore')
 
-            # [HTML 파싱 로직]
             if filename.endswith('.html') or '<html' in raw_text[:100].lower():
                 tr_pattern = re.compile(r'<tr[^>]*>(.*?)</tr>', re.DOTALL | re.IGNORECASE)
                 td_pattern = re.compile(r'<td[^>]*>(.*?)</td>', re.DOTALL | re.IGNORECASE)
-                
                 rows = tr_pattern.findall(raw_text)
-                
                 for row_content in rows:
                     cols = td_pattern.findall(row_content)
                     if len(cols) >= 3:
                         prefixes = ['제', '령', '규']
-                        
                         for i in range(3):
                             col_html = cols[i]
                             title_match = re.search(r'<span[^>]*class="bl"[^>]*>(.*?)</span>', col_html)
-                            
                             if title_match:
                                 raw_title = title_match.group(1).strip()
                                 clean_title = re.sub(r'<[^>]+>', '', raw_title).strip()
                                 clean_content = re.sub(r'<[^>]+>', '\n', col_html)
                                 clean_content = re.sub(r'\n+', '\n', clean_content).strip()
-                                
                                 final_title = f"{prefixes[i]}-{title_prefix}-{clean_title}"
-                                
                                 dup_count = 0; temp_name = final_title
                                 while any(r[0] == temp_name for r in rows_to_add) or temp_name in existing:
                                     dup_count += 1; temp_name = f"{final_title}_{dup_count}"
-                                
                                 rows_to_add.append([temp_name, clean_content, creator, today])
-
-            # [핵심 수정] 텍스트 파일 자동 분류 로직
             else:
                 f_stream = StringIO(raw_text)
                 normalized_text = raw_text.replace('\r\n', '\n')
-                
-                # 법령 종류 자동 감지 (파일명 또는 입력된 제목 기준)
-                category_prefix = "제" # 기본값: 법
-                
-                if "시행규칙" in title_prefix:
-                    category_prefix = "규"
-                elif "시행령" in title_prefix:
-                    category_prefix = "령"
+                base_category = "제"
+                if "시행규칙" in title_prefix: base_category = "규"
+                elif "시행령" in title_prefix: base_category = "령"
                 
                 blocks = re.split(r'\n\s*\n', normalized_text)
                 for block in blocks:
                     clean_block = block.strip()
                     if not clean_block: continue
-                    
-                    first_line = clean_block.split('\n')[0]
+                    first_line = clean_block.split('\n')[0].strip()
                     snippet = first_line[:15].replace(" ", "").replace('/', '')
-                    
-                    # 제목 생성: (분류)-(파일명)-(내용요약)
-                    q_name = f"{category_prefix}-{title_prefix}-{snippet}"
-                    
+                    current_prefix = base_category
+                    if re.match(r'^(령|영\s|시행령)', first_line): current_prefix = "령"
+                    elif re.match(r'^(규|규칙|시행규칙)', first_line): current_prefix = "규"
+                    q_name = f"{current_prefix}-{title_prefix}-{snippet}"
                     dup_count = 0; temp_name = q_name
                     while any(r[0] == temp_name for r in rows_to_add) or temp_name in existing:
                         dup_count += 1; temp_name = f"{q_name}_{dup_count}"
-                    
                     rows_to_add.append([temp_name, clean_block, creator, today])
             
             if rows_to_add: 
@@ -214,8 +197,6 @@ class GoogleSheetManager:
             records = self.get_safe_records(self.quests_ws)
             to_del = []
             for i, r in enumerate(records):
-                # 파일명(prefix)이 포함된 모든 카드 삭제
-                # 예: prefix="형법" 이면 "제-형법-...", "령-형법-..." 모두 삭제
                 q_name = str(r.get('quest_name'))
                 if f"-{prefix}-" in q_name or q_name.startswith(f"{prefix}-"):
                     to_del.append(i + 2)
@@ -239,30 +220,20 @@ class GoogleSheetManager:
             records = self.get_safe_records(self.quests_ws)
             to_merge = []
             to_del_indices = []
-            
             for i, r in enumerate(records):
                 if r.get('quest_name') in quest_names:
                     to_merge.append(r)
                     to_del_indices.append(i + 2)
-            
             if not to_merge: return False
-
             combined_content = "\n\n".join([q.get('content', '') for q in to_merge])
-            
-            # 기존 제목의 분류(제/령/규)와 파일명 유지
             base_full_title = to_merge[0].get('quest_name')
             parts = base_full_title.split('-')
-            
-            # 분류 접두어가 있는 경우 (제-형법-제1조)
             if len(parts) >= 3:
-                prefix = parts[0] # 제
-                filename = parts[1] # 형법
+                prefix = parts[0]; filename = parts[1]
                 new_title = f"{prefix}-{filename}-합본_{datetime.datetime.now().strftime('%H%M%S')}"
             else:
                 new_title = f"{base_full_title}-합본_{datetime.datetime.now().strftime('%H%M%S')}"
-            
             self.quests_ws.append_row([new_title, combined_content, creator, str(datetime.date.today())])
-            
             for idx in sorted(to_del_indices, reverse=True):
                 self.quests_ws.delete_rows(idx)
             return True
@@ -280,19 +251,13 @@ class GoogleSheetManager:
             blocks = re.split(r'\n\s*\n', content)
             blocks = [b.strip() for b in blocks if b.strip()]
             if len(blocks) < 2: return False
-
             rows_to_add = []
             today = str(datetime.date.today())
-            
-            # 기존 제목 구조 유지 (제-형법-제1조 -> 제-형법-제1조_part1)
             base_name = quest_name
-            if '_' in base_name and 'part' in base_name:
-                base_name = base_name.rsplit('_', 1)[0] # 이미 part가 있으면 제거 후 다시 붙임
-
+            if '_' in base_name and 'part' in base_name: base_name = base_name.rsplit('_', 1)[0]
             for idx, block in enumerate(blocks):
                 new_name = f"{base_name}_part{idx+1}"
                 rows_to_add.append([new_name, block, creator, today])
-            
             self.quests_ws.append_rows(rows_to_add)
             self.quests_ws.delete_rows(cell.row)
             return True
@@ -306,17 +271,14 @@ class GoogleSheetManager:
             q_cell = self.quests_ws.find(old_name, in_column=1)
             if q_cell: self.quests_ws.update_cell(q_cell.row, 1, new_name)
             else: return False
-
             try:
                 col_cells = self.collections_ws.findall(old_name, in_column=5) 
                 for cell in col_cells: self.collections_ws.update_cell(cell.row, 5, new_name)
             except: pass
-
             try:
                 abb_cells = self.abbrev_ws.findall(old_name, in_column=2) 
                 for cell in abb_cells: self.abbrev_ws.update_cell(cell.row, 2, new_name)
             except: pass
-            
             return True
         except Exception as e:
             print(f"Rename Error: {e}")
@@ -331,8 +293,7 @@ class GoogleSheetManager:
         try:
             records = self.get_safe_records(self.quests_ws)
             for r in records:
-                if r.get('quest_name') == quest_name:
-                    return r.get('content', "")
+                if r.get('quest_name') == quest_name: return r.get('content', "")
             return ""
         except: return ""
 
@@ -349,7 +310,6 @@ class GoogleSheetManager:
             all_quests = self.get_safe_records(self.quests_ws)
             my_cards = self.get_my_progress(user_id)
             my_quest_names = [c.get('quest_name') for c in my_cards if c.get('type') == 'BLANK']
-            
             if mode == 'acquire': return [q for q in all_quests if q.get('quest_name') not in my_quest_names]
             elif mode == 'review': return my_cards 
             elif mode == 'abbrev': return [c for c in my_cards if int(c.get('level', 0)) >= 1]
@@ -363,15 +323,12 @@ class GoogleSheetManager:
                 self.register_social(user_id)
                 user_data, fresh_row_idx = self.get_user_by_id(user_id)
             if not user_data: return 1, 0
-
             records = self.get_safe_records(self.collections_ws)
             target_type = 'ABBREV' if mode == 'abbrev' else 'BLANK'
             found_idx = -1; current_level = 0
-            
             for i, row in enumerate(records):
                 if str(row.get('user_id')) == str(user_id) and row.get('quest_name') == quest_name and row.get('type') == target_type:
                     found_idx = i + 2; current_level = int(row.get('level') or 0); break
-            
             xp_gain = 0
             try:
                 if found_idx == -1: 
@@ -387,7 +344,6 @@ class GoogleSheetManager:
                     self.collections_ws.append_row([user_id, content, grade, str(datetime.date.today()), quest_name, 1, target_type])
                 else:
                     self.collections_ws.update_cell(found_idx, 6, current_level + 1)
-
             u_lv, new_xp = self.add_xp(user_id, xp_gain, user_data, fresh_row_idx)
             return u_lv, new_xp
         except Exception as e:
@@ -399,16 +355,13 @@ class GoogleSheetManager:
         if not user_data or not row_idx:
             user_data, row_idx = self.get_user_by_id(user_id)
             if not user_data: return 1, 0
-
         try:
             u_xp = int(user_data.get('xp', 0))
             u_lv = int(user_data.get('level', 1))
             new_xp = u_xp + amount
             req = u_lv * 100
             while new_xp >= req:
-                u_lv += 1
-                new_xp -= req
-                req = u_lv * 100
+                u_lv += 1; new_xp -= req; req = u_lv * 100
             self.users_ws.update_cell(row_idx, 3, u_lv)
             self.users_ws.update_cell(row_idx, 4, new_xp)
             return u_lv, new_xp
@@ -469,15 +422,12 @@ class GoogleSheetManager:
             col_rows = self.collections_ws.get_all_values()
             to_del_col = [i + 1 for i, row in enumerate(col_rows) if i > 0 and str(row[0]) == str(user_id)]
             for r in sorted(to_del_col, reverse=True): self.collections_ws.delete_rows(r)
-
             abb_rows = self.abbrev_ws.get_all_values()
             to_del_abb = [i + 1 for i, row in enumerate(abb_rows) if i > 0 and str(row[0]) == str(user_id)]
             for r in sorted(to_del_abb, reverse=True): self.abbrev_ws.delete_rows(r)
-            
             ql_rows = self.quest_log_ws.get_all_values()
             to_del_ql = [i + 1 for i, row in enumerate(ql_rows) if i > 0 and str(row[0]) == str(user_id)]
             for r in sorted(to_del_ql, reverse=True): self.quest_log_ws.delete_rows(r)
-
             cell = self.users_ws.find(user_id, in_column=1)
             if cell:
                 self.users_ws.update_cell(cell.row, 3, 1) 
@@ -492,8 +442,7 @@ class GoogleSheetManager:
         today = str(datetime.date.today())
         records = self.get_safe_records(self.quest_log_ws)
         for r in records:
-            if str(r.get('user_id')) == str(user_id):
-                return r.get('last_daily_login') == today
+            if str(r.get('user_id')) == str(user_id): return r.get('last_daily_login') == today
         return False
 
     def claim_daily_login(self, user_id):
@@ -510,6 +459,44 @@ class GoogleSheetManager:
         if not found: self.quest_log_ws.append_row([user_id, today])
         lv, xp = self.add_xp(user_id, 50)
         return True, lv, xp
+
+    # [신규] 순차적 3단 배열 로직 (Waterfall 방식)
+    def align_quests(self, quests):
+        rows = []
+        current = {'law': None, 'decree': None, 'rule': None}
+        others = []
+
+        for q in quests:
+            name = q.get('quest_name', '')
+            
+            if name.startswith('제-'):
+                # 법률이 나오면 무조건 줄바꿈 (새 조문의 시작)
+                if current['law'] or current['decree'] or current['rule']:
+                    rows.append(current)
+                    current = {'law': None, 'decree': None, 'rule': None}
+                current['law'] = q
+                
+            elif name.startswith('령-'):
+                # 이미 령이 있거나, 규가 있으면 (순서가 꼬인 경우) 줄바꿈
+                if current['decree'] or current['rule']:
+                    rows.append(current)
+                    current = {'law': None, 'decree': None, 'rule': None}
+                current['decree'] = q
+                
+            elif name.startswith('규-'):
+                # 이미 규가 있으면 줄바꿈
+                if current['rule']:
+                    rows.append(current)
+                    current = {'law': None, 'decree': None, 'rule': None}
+                current['rule'] = q
+            else:
+                others.append(q)
+        
+        # 마지막 행 추가
+        if current['law'] or current['decree'] or current['rule']:
+            rows.append(current)
+            
+        return rows, others
 
 gm = GoogleSheetManager()
 
@@ -586,7 +573,7 @@ def zone_generate():
             elif 'rename_old' in request.form:
                 old = request.form['rename_old']; new = request.form['rename_new']
                 if gm.rename_quest(old, new): flash("제목 수정 완료!")
-                else: flash("수정 실패 (존재하지 않거나 DB 오류)")
+                else: flash("수정 실패")
             elif 'new_q_file' in request.files:
                 f = request.files['new_q_file']
                 ok, cnt = gm.save_split_quests(request.form['new_q_name'], f, session['user_id'])
@@ -602,7 +589,10 @@ def zone_generate():
         quests = gm.get_quest_list()
         my_progress = gm.get_my_progress(session['user_id'])
         my_completed = [c.get('quest_name') for c in my_progress if c.get('type') == 'BLANK']
-        return render_template('zone_generate.html', quests=quests, my_completed=my_completed)
+        
+        aligned_quests, others = gm.align_quests(quests)
+        
+        return render_template('zone_generate.html', aligned_quests=aligned_quests, others=others, my_completed=my_completed)
     except Exception as e:
         return f"<h3>⚠️ 생성 구역 오류</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로</a>"
 
@@ -625,17 +615,14 @@ def maker():
             else:
                 flash("나누기 실패")
                 return redirect(url_for('maker', quest_name=q_name))
-        
         old_title = request.form.get('old_title')
         new_title = request.form.get('title')
         content = request.form['final_content']
-        
         if old_title and new_title and old_title != new_title:
             gm.rename_quest(old_title, new_title)
             current_title = new_title
         else:
             current_title = old_title if old_title else new_title
-
         if gm.update_quest_content(current_title, content):
             flash("생성완료.")
             return redirect(url_for('zone_generate'))
@@ -654,8 +641,11 @@ def zone_acquire():
             if quest:
                 ACTIVE_GAMES[session['user_id']] = { 'mode': 'acquire', 'quest_name': q_name, 'content': quest['content'] }
                 return redirect(url_for('play_game'))
+        
         quests = gm.get_available_quests(session['user_id'], 'acquire')
-        return render_template('zone_list.html', title="획득 구역", quests=quests, mode='acquire')
+        aligned_quests, others = gm.align_quests(quests) 
+        
+        return render_template('zone_list.html', title="획득 구역", aligned_quests=aligned_quests, others=others, mode='acquire')
     except Exception as e:
         return f"<h3>⚠️ 획득 구역 오류</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로</a>"
 
@@ -683,7 +673,9 @@ def zone_review():
                 return redirect(url_for('play_game'))
                 
         cards = gm.get_available_quests(session['user_id'], 'review')
-        return render_template('zone_list.html', title="복습 구역", quests=cards, mode='review')
+        aligned_quests, others = gm.align_quests(cards) 
+        
+        return render_template('zone_list.html', title="복습 구역", aligned_quests=aligned_quests, others=others, mode='review')
     except Exception as e:
         return f"<h3>⚠️ 복습 구역 오류 발생</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로 돌아가기</a>"
 
@@ -708,7 +700,9 @@ def zone_abbrev():
                 return redirect(url_for('play_game'))
                 
         cards = gm.get_available_quests(session['user_id'], 'abbrev')
-        return render_template('zone_list.html', title="약어 훈련소", quests=cards, mode='abbrev')
+        aligned_quests, others = gm.align_quests(cards)
+        
+        return render_template('zone_list.html', title="약어 훈련소", aligned_quests=aligned_quests, others=others, mode='abbrev')
     except Exception as e:
         return f"<h3>⚠️ 약어 구역 오류</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로</a>"
 
