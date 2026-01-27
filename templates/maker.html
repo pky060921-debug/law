@@ -87,19 +87,24 @@
     const tokenMode = document.getElementById('token-mode');
     const editorArea = document.getElementById('editor-area');
     
-    // [핵심] 원래 제목 분석
-    const originalFullTitle = "{{ title }}";
-    let groupPrefix = ""; // 그룹명 (예: 형법)
-    let currentSuffix = originalFullTitle; // 뒷부분 (예: 제1조)
+    // [조사 목록] 긴 조사부터 검사해야 정확하게 분리됨
+    const particles = [
+        '으로서', '으로써', '에서도', '에서는', '에게는', '까지도', '부터는', '에게서', '으로는', '하라고', '한다고', '이라는', '이라고', '이나마', '이라도', '야말로', '께서는', 
+        '에서는', '에게는', '으로는', '으로부터', '에서부터',
+        '라고', '으로', '에서', '부터', '까지', '이다', '이나', '이며', '이고', '이라', '이요', '하러', '하지', '하여', '하되', '하고', '하면', '하니', '하다', '에는', '에게', '한테', '보다', '처럼', '만큼', '마다', '조차', '마저', '라도', '나마', '이랑', '께서', '과는', '와는', 
+        '은', '는', '이', '가', '을', '를', '에', '의', '와', '과', '로', '도', '만', '께', '랑', '며', '고', '라', '요', '서', '여'
+    ];
 
-    // '-'가 있으면 분리
+    const originalFullTitle = "{{ title }}";
+    let groupPrefix = "";
+    let currentSuffix = originalFullTitle;
+
     const lastDashIdx = originalFullTitle.lastIndexOf('-');
     if (lastDashIdx !== -1) {
-        groupPrefix = originalFullTitle.substring(0, lastDashIdx + 1); // "형법-"
-        currentSuffix = originalFullTitle.substring(lastDashIdx + 1);  // "제1조"
+        groupPrefix = originalFullTitle.substring(0, lastDashIdx + 1);
+        currentSuffix = originalFullTitle.substring(lastDashIdx + 1);
     }
 
-    // 화면 표시 초기화
     document.getElementById('disp-prefix').innerText = groupPrefix;
     document.getElementById('disp-suffix').innerText = currentSuffix;
 
@@ -127,6 +132,7 @@
     }
 
     function initTokens(text) {
+        // [특수문자 분리] 한글/영문/숫자 외에는 모두 쪼갬
         const parts = text.split(/(\{.+?\}|\s+|[^\w가-힣])/g);
         let html = '';
         tokens = [];
@@ -135,27 +141,51 @@
         parts.forEach(part => {
             if (!part || part === '') return;
             
+            // 1. 공백
             if (/^\s+$/.test(part)) {
                 html += part.replace(/\n/g, '<br>').replace(/ /g, '<span class="space-token"> </span>');
                 tokens.push({ text: part, type: 'space', selected: false, isTitle: false });
                 idx++;
             } 
+            // 2. 이미 빈칸인 경우 ({...})
             else if (part.startsWith('{') && part.endsWith('}')) {
                 const core = part.slice(1, -1);
                 tokens.push({ text: core, type: 'word', selected: true, isTitle: false });
                 html += `<span class="token selected" id="t-${idx}" onclick="toggle(${idx})">${core}</span>`;
                 idx++;
             }
+            // 3. 특수기호 (기호는 분리만 하고 조사 처리 안 함)
             else if (/^[^\w가-힣]$/.test(part)) {
                 tokens.push({ text: part, type: 'word', selected: false, isTitle: false });
                 html += `<span class="token" id="t-${idx}" onclick="toggle(${idx})">${part}</span>`;
                 idx++;
             }
+            // 4. 일반 단어 -> [조사 분리 로직]
             else {
-                let noun = part; 
+                let noun = part;
+                let particle = "";
+
+                // 긴 조사부터 매칭 (예: '으로써'가 '써'보다 먼저 매칭되도록)
+                for (let p of particles) {
+                    // 단어가 조사로 끝나고, 남은 단어가 1글자 이상일 때만 분리 (예: '가'는 분리 안함)
+                    if (noun.endsWith(p) && noun.length > p.length) {
+                        particle = p;
+                        noun = noun.slice(0, -p.length);
+                        break; // 가장 긴 조사를 찾으면 중단
+                    }
+                }
+
+                // 4-1. 명사 부분 추가
                 tokens.push({ text: noun, type: 'word', selected: false, isTitle: false });
                 html += `<span class="token" id="t-${idx}" onclick="toggle(${idx})">${noun}</span>`;
                 idx++;
+
+                // 4-2. 조사 부분 추가 (있다면)
+                if (particle) {
+                    tokens.push({ text: particle, type: 'word', selected: false, isTitle: false });
+                    html += `<span class="token" id="t-${idx}" onclick="toggle(${idx})">${particle}</span>`;
+                    idx++;
+                }
             }
         });
         editorArea.innerHTML = html;
@@ -182,23 +212,19 @@
         }
     }
 
-    // [핵심] 제목 미리보기 업데이트 (그룹명 + 선택단어)
     function updateTitlePreview() {
-        const selectedWords = tokens.filter(t => t.isTitle).map(t => t.text).join('');
-        
-        // 선택한 단어가 있으면 그것을 뒷부분(Suffix)으로 사용
-        if (selectedWords.length > 0) {
-            document.getElementById('disp-suffix').innerText = selectedWords;
-            document.getElementById('final_title').value = groupPrefix + selectedWords;
+        const titleWords = tokens.filter(t => t.isTitle).map(t => t.text).join('');
+        if (titleWords.length > 0) {
+            document.getElementById('disp-suffix').innerText = titleWords;
+            document.getElementById('final_title').value = groupPrefix + titleWords;
         } else {
-            // 선택한 게 없으면 원래 제목 유지
             document.getElementById('disp-suffix').innerText = currentSuffix;
             document.getElementById('final_title').value = originalFullTitle;
         }
     }
 
     function resetAll() {
-        if(!confirm("초기화하시겠습니까? (제목 설정도 초기화됩니다)")) return;
+        if(!confirm("초기화하시겠습니까?")) return;
         tokens.forEach((t, i) => {
             t.selected = false;
             t.isTitle = false;
