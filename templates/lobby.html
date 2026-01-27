@@ -1,58 +1,59 @@
 {% extends "layout.html" %}
 
 {% block content %}
-<style>
-    .profile-section { text-align: center; margin-bottom: 30px; }
-    .hero-avatar { font-size: 6rem; animation: bounce 2s infinite; }
-    .level-badge { background: #f39c12; color: #fff; padding: 5px 15px; border-radius: 20px; font-weight: bold; }
-    
-    .zone-grid {
-        display: grid; grid-template-columns: 1fr 1fr; gap: 15px;
-    }
-    .zone-card {
-        background: #34495e; padding: 20px; border-radius: 15px; text-align: center;
-        text-decoration: none; color: white; transition: 0.2s; border: 2px solid #2c3e50;
-    }
-    .zone-card:hover { transform: translateY(-5px); border-color: #f39c12; }
-    .zone-icon { font-size: 2.5rem; display: block; margin-bottom: 10px; }
-    .zone-title { font-size: 1.2rem; font-weight: bold; display: block; }
-    .zone-desc { font-size: 0.8rem; color: #bdc3c7; }
-
-    @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-</style>
-
-<div class="profile-section">
-    <div class="hero-avatar">
-        {% if level < 5 %}🥚{% elif level < 15 %}👶{% elif level < 30 %}👦{% elif level < 50 %}🦸‍♂️{% else %}👑{% endif %}
-    </div>
-    <h2>{{ nickname }}님</h2>
-    <span class="level-badge">Lv.{{ level }}</span>
-    <p style="color:#aaa; font-size:0.9rem; margin-top:5px;">다음 단계까지 {{ req_xp - xp }} XP</p>
+<div style="text-align:center; margin-bottom:30px;">
+    <h1>🏠 작전 본부</h1>
+    <p style="color:#bdc3c7;">환영합니다, <strong style="color:#f39c12;">{{ nickname }}</strong> 요원님!</p>
 </div>
 
-<div class="zone-grid">
-    <a href="/zone/generate" class="zone-card" style="border-bottom: 4px solid #e74c3c;">
-        <span class="zone-icon">🏭</span>
-        <span class="zone-title">생성 구역</span>
-        <span class="zone-desc">파일 업로드 & 카드 생성</span>
-    </a>
+<div style="background:#34495e; padding:20px; border-radius:15px; text-align:center; box-shadow: 0 4px 10px rgba(0,0,0,0.3); margin-bottom:30px;">
+    <h2 style="color:#ecf0f1; margin-bottom:5px;">Lv. {{ level }}</h2>
+    <div style="background:#2c3e50; height:10px; border-radius:5px; width:80%; margin:10px auto; overflow:hidden;">
+        <div style="background:#2ecc71; height:100%; width:{{ (xp / req_xp) * 100 }}%;"></div>
+    </div>
+    <p style="color:#95a5a6; font-size:0.9rem;">경험치: {{ xp }} / {{ req_xp }}</p>
+    
+    <form action="/update_nickname" method="POST" style="margin-top:15px;">
+        <input type="text" name="new_nickname" placeholder="새 닉네임" required style="padding:5px; border-radius:5px; border:none; width:120px; text-align:center;">
+        <button type="submit" style="background:#f39c12; border:none; padding:5px 10px; border-radius:5px; cursor:pointer; font-weight:bold;">변경</button>
+    </form>
+</div>
 
-    <a href="/zone/acquire" class="zone-card" style="border-bottom: 4px solid #3498db;">
-        <span class="zone-icon">📥</span>
-        <span class="zone-title">획득 구역</span>
-        <span class="zone-desc">새로운 카드 학습하기</span>
+<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:15px;">
+    <a href="/zone/generate" style="text-decoration:none;">
+        <div style="background:#e67e22; padding:20px; border-radius:10px; text-align:center; color:white; transition:0.2s;">
+            <div style="font-size:2rem;">🏭</div>
+            <div style="font-weight:bold; margin-top:5px;">생성 구역</div>
+        </div>
     </a>
+    
+    <a href="/zone/acquire" style="text-decoration:none;">
+        <div style="background:#3498db; padding:20px; border-radius:10px; text-align:center; color:white; transition:0.2s;">
+            <div style="font-size:2rem;">📥</div>
+            <div style="font-weight:bold; margin-top:5px;">획득 구역</div>
+        </div>
+    </a>
+    
+    <a href="/zone/review" style="text-decoration:none;">
+        <div style="background:#2ecc71; padding:20px; border-radius:10px; text-align:center; color:white; transition:0.2s;">
+            <div style="font-size:2rem;">🔄</div>
+            <div style="font-weight:bold; margin-top:5px;">복습 구역</div>
+        </div>
+    </a>
+    
+    <a href="/zone/abbrev" style="text-decoration:none;">
+        <div style="background:#9b59b6; padding:20px; border-radius:10px; text-align:center; color:white; transition:0.2s;">
+            <div style="font-size:2rem;">⚡</div>
+            <div style="font-weight:bold; margin-top:5px;">약어 훈련</div>
+        </div>
+    </a>
+</div>
 
-    <a href="/zone/review" class="zone-card" style="border-bottom: 4px solid #2ecc71;">
-        <span class="zone-icon">🔄</span>
-        <span class="zone-title">복습 구역</span>
-        <span class="zone-desc">무제한 반복 & 레벨업</span>
-    </a>
-
-    <a href="/zone/abbrev" class="zone-card" style="border-bottom: 4px solid #9b59b6;">
-        <span class="zone-icon">⚡</span>
-        <span class="zone-title">약어 구역</span>
-        <span class="zone-desc">두문자 암기 테스트</span>
-    </a>
+<div style="margin-top:50px; text-align:center; border-top:1px solid #7f8c8d; padding-top:30px;">
+    <form action="/reset_progress" method="POST" onsubmit="return confirm('⚠️ 경고: 모든 학습 기록, 레벨, 약어가 삭제되고 초기화됩니다. 정말 진행하시겠습니까?');">
+        <button type="submit" style="background:#c0392b; color:white; border:none; padding:12px 25px; border-radius:8px; font-weight:bold; cursor:pointer;">
+            🛑 학습내용 전체 초기화
+        </button>
+    </form>
 </div>
 {% endblock %}
