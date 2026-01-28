@@ -6,20 +6,17 @@
 <div class="card-item">
     <div style="display:flex; align-items:center; flex:1; overflow:hidden;">
         <input type="checkbox" name="merge_targets" value="{{ item.get('quest_name') }}" style="margin-right:10px; cursor:pointer; transform:scale(1.2);">
-        
-        <span style="color:#ecf0f1; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:default;" title="{{ item.get('quest_name') }}">
+        <span style="color:#ecf0f1; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="{{ item.get('quest_name') }}">
             {% if item.get('quest_name') in my_completed %}
                 <span style="color:#2ecc71; margin-right:3px;">✅</span>
             {% elif '{' in item.get('content', '') %}
                 <span style="color:#3498db; margin-right:3px;">🔨</span>
             {% endif %}
-            
             {{ item.get('quest_name', '').split('-')[-1] }}
         </span>
     </div>
-    
     <div style="display:flex; gap:5px; margin-left:5px;">
-        <button type="submit" name="delete_single" value="{{ item.get('quest_name') }}" style="background:none; border:none; cursor:pointer; font-size:1rem; padding:0;" onclick="return confirm('이 카드를 삭제하시겠습니까?');">🗑️</button>
+        <button type="submit" name="delete_single" value="{{ item.get('quest_name') }}" style="background:none; border:none; cursor:pointer; font-size:1rem; padding:0;" onclick="return confirm('삭제하시겠습니까?');">🗑️</button>
         <a href="/maker?quest_name={{ item.get('quest_name') }}" style="text-decoration:none;">
             <button type="button" style="background:#2ecc71; color:white; border:none; padding:3px 8px; border-radius:3px; cursor:pointer; font-size:0.8rem;">📝</button>
         </a>
@@ -27,6 +24,75 @@
 </div>
 {% endmacro %}
 
+<style>
+    .law-table {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 10px;
+    }
+    .law-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 10px;
+        background: #253342;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #34495e;
+    }
+    .law-header {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 10px;
+        text-align: center;
+        font-weight: bold;
+        margin-bottom: 5px;
+        color: #bdc3c7;
+        margin-top: 10px;
+    }
+    .col-empty {
+        background: rgba(0,0,0,0.2);
+        border-radius: 5px;
+        border: 1px dashed #444;
+        min-height: 40px;
+    }
+    .card-item {
+        background: #34495e;
+        padding: 8px;
+        border-radius: 5px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border: 1px solid #444;
+        transition: 0.2s;
+    }
+    .card-item:hover { border-color: #f39c12; }
+
+    details {
+        margin-bottom: 20px;
+        background: #2c3e50;
+        border-radius: 10px;
+        border: 1px solid #444;
+        overflow: hidden;
+    }
+    summary {
+        padding: 15px;
+        cursor: pointer;
+        font-weight: bold;
+        color: #ecf0f1;
+        list-style: none;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    summary:hover { background: #34495e; }
+
+    @media (max-width: 768px) {
+        .law-row { grid-template-columns: 1fr; gap: 5px; }
+        .law-header { display: none; }
+        .col-empty { display: none; }
+    }
+</style>
 
 <h1>🏭 빈칸 카드 생성소</h1>
 <p style="color:#aaa; text-align:center;">업로드한 법령을 수정하거나 빈칸을 만드세요.</p>
@@ -51,129 +117,49 @@
         </button>
     </div>
     
-    {% if not quests %}
+    {% if not aligned_structure and not others %}
         <div style="text-align:center; padding:40px; color:#95a5a6; border: 2px dashed #555; border-radius: 10px;">
             <p>등록된 카드가 없습니다.</p>
         </div>
     {% else %}
-        {% set groups = {} %}
-        {% for q in quests %}
-            {% set title = q.get('quest_name', '').split('-')[0] %}
-            {% if title not in groups %}{% set _ = groups.update({title: []}) %}{% endif %}
-            {% set _ = groups[title].append(q) %}
-        {% endfor %}
-
-        {% for title, items in groups.items() %}
-        <details style="margin-bottom:15px; background:#2c3e50; border-radius:10px; border:1px solid #444; overflow:hidden;">
-            <summary style="padding:15px; cursor:pointer; font-weight:bold; color:#ecf0f1; list-style:none; display:flex; justify-content:space-between; align-items:center;">
-                <span>📂 {{ title }} <span style="color:#bdc3c7; font-size:0.8em;">({{ items|length }}개)</span></span>
-                <span style="font-size:0.8em; color:#f39c12;">▼ 펼치기</span>
+        
+        {% for law_name, rows in aligned_structure.items() %}
+        <details open>
+            <summary>
+                <span>📂 {{ law_name }} <span style="color:#bdc3c7; font-size:0.8em;">({{ rows|length }}개 조문)</span></span>
+                <button type="submit" name="delete_group" value="{{ law_name }}" style="background:#c0392b; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer; font-size:0.8rem;" onclick="return confirm('정말 \'' + '{{ law_name }}' + '\' 그룹 전체를 삭제하시겠습니까?');">그룹 삭제 🗑️</button>
             </summary>
             
-            <div style="background:#34495e; padding:10px; border-top:1px solid #444;">
-                <div style="text-align:right; margin-bottom:10px;">
-                    <button type="submit" name="delete_group" value="{{ title }}" style="background:#c0392b; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer; font-size:0.9rem;" onclick="return confirm('정말 \'' + '{{ title }}' + '\' 그룹 전체를 삭제하시겠습니까?');">
-                        그룹 전체 삭제 🗑️
-                    </button>
+            <div style="padding:15px; border-top:1px solid #444; background:#222f3e;">
+                <div class="law-header">
+                    <div style="color:#3498db;">⚖️ 법률</div>
+                    <div style="color:#e67e22;">📜 시행령</div>
+                    <div style="color:#2ecc71;">📏 시행규칙</div>
                 </div>
 
-                {% set laws = [] %}{% set decrees = [] %}{% set rules = [] %}{% set others = [] %}
-                
-                {% for item in items %}
-                    {% if item.get('quest_name').startswith('제-') %}
-                        {% set _ = laws.append(item) %}
-                    {% elif item.get('quest_name').startswith('령-') %}
-                        {% set _ = decrees.append(item) %}
-                    {% elif item.get('quest_name').startswith('규-') %}
-                        {% set _ = rules.append(item) %}
-                    {% else %}
-                        {% set _ = others.append(item) %}
-                    {% endif %}
-                {% endfor %}
-
-                <div class="law-board">
-                    <div class="law-column col-law">
-                        <h4>⚖️ 법률 ({{ laws|length }})</h4>
-                        {% for item in laws %}
-                            {{ card_block(item, my_completed) }}
-                        {% endfor %}
+                <div class="law-table">
+                    {% for group in rows %}
+                    <div class="law-row">
+                        {% if group['law'] %}{{ card_block(group['law'], my_completed) }}{% else %}<div class="col-empty"></div>{% endif %}
+                        {% if group['decree'] %}{{ card_block(group['decree'], my_completed) }}{% else %}<div class="col-empty"></div>{% endif %}
+                        {% if group['rule'] %}{{ card_block(group['rule'], my_completed) }}{% else %}<div class="col-empty"></div>{% endif %}
                     </div>
-
-                    <div class="law-column col-decree">
-                        <h4>📜 시행령 ({{ decrees|length }})</h4>
-                        {% for item in decrees %}
-                            {{ card_block(item, my_completed) }}
-                        {% endfor %}
-                    </div>
-
-                    <div class="law-column col-rule">
-                        <h4>📏 시행규칙 ({{ rules|length }})</h4>
-                        {% for item in rules %}
-                            {{ card_block(item, my_completed) }}
-                        {% endfor %}
-                    </div>
-                </div>
-
-                {% if others %}
-                <div style="margin-top:15px; border-top:1px dashed #555; padding-top:10px;">
-                    <h4 style="color:#bdc3c7; text-align:center;">기타 문서</h4>
-                    {% for item in others %}
-                        {{ card_block(item, my_completed) }}
                     {% endfor %}
                 </div>
-                {% endif %}
-
             </div>
         </details>
         {% endfor %}
+
+        {% if others %}
+        <div style="margin-top:30px; border-top:1px dashed #555; padding-top:20px;">
+            <h4 style="color:#bdc3c7; text-align:center;">📂 기타 문서</h4>
+            <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:10px;">
+                {% for item in others %}
+                    {{ card_block(item, my_completed) }}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
     {% endif %}
 </form>
-
-<style>
-    /* 3단 레이아웃 스타일 */
-    .law-board {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        gap: 15px;
-        margin-top: 10px;
-    }
-    
-    .law-column {
-        background: #253342;
-        padding: 10px;
-        border-radius: 8px;
-        border: 1px solid #34495e;
-    }
-
-    .law-column h4 {
-        text-align: center;
-        margin: 0 0 10px 0;
-        padding-bottom: 5px;
-        border-bottom: 2px solid #555;
-        font-size: 1rem;
-    }
-
-    .col-law h4 { color: #3498db; border-color: #3498db; }
-    .col-decree h4 { color: #e67e22; border-color: #e67e22; }
-    .col-rule h4 { color: #2ecc71; border-color: #2ecc71; }
-
-    .card-item {
-        background: #34495e;
-        padding: 8px;
-        margin-bottom: 8px;
-        border-radius: 5px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border: 1px solid #444;
-        transition: 0.2s;
-    }
-    .card-item:hover { border-color: #f39c12; }
-
-    /* 모바일 최적화 */
-    @media (max-width: 768px) {
-        .law-board { grid-template-columns: 1fr; }
-        .law-column { margin-bottom: 15px; }
-    }
-</style>
 {% endblock %}
