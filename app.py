@@ -129,11 +129,20 @@ class GoogleSheetManager:
             return True
         except: return False
 
-    def update_nickname(self, row_idx, new_nick):
-        if self.ensure_connection():
-            try: self.users_ws.update_cell(row_idx, 8, new_nick); return True
-            except: return False
-        return False
+    # [핵심 수정] ID로 직접 찾아서 수정하는 확실한 방법
+    def update_nickname(self, user_id, new_nick):
+        if not self.ensure_connection(): return False
+        try:
+            # 1열(user_id)에서 해당 유저 찾기
+            cell = self.users_ws.find(user_id, in_column=1)
+            if cell:
+                # 찾은 행의 8번째 열(nickname) 수정
+                self.users_ws.update_cell(cell.row, 8, new_nick)
+                return True
+            return False
+        except Exception as e:
+            print(f"Nick Update Error: {e}")
+            return False
 
     def save_split_quests(self, title_prefix, file_obj, creator):
         if not self.ensure_connection(): return False, "DB 접속 실패"
@@ -528,15 +537,13 @@ def google_callback():
 @app.route('/lobby')
 def lobby():
     if 'user_id' not in session: return redirect(url_for('index'))
-    user, row_idx = gm.get_user_by_id(session['user_id'])
+    user, _ = gm.get_user_by_id(session['user_id'])
     
     if user: 
         session['level'] = user.get('level', 1)
         session['xp'] = user.get('xp', 0)
         session['nickname'] = user.get('nickname', '요원')
         session['points'] = user.get('points', 0)
-        # [핵심] 위치 정보가 있으면 세션에 확실히 저장
-        if row_idx: session['user_row_idx'] = row_idx
     else:
         session['level'] = session.get('level', 1)
         session['xp'] = session.get('xp', 0)
@@ -759,26 +766,18 @@ def play_game():
             return redirect(url_for(f"zone_{return_zone}"))
         except Exception as e: return f"<h3>⚠️ 오류 발생</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로 돌아가기</a>"
 
-# [핵심 수정] 닉네임 변경 기능 강화
+# [수정된 닉네임 변경 라우트]
 @app.route('/update_nickname', methods=['POST'])
 def update_nickname():
     if 'user_id' in session:
         new_nick = request.form.get('new_nickname')
         if new_nick:
-            # 1. 세션에 위치 정보가 없으면 DB에서 다시 조회 (안전장치)
-            row_idx = session.get('user_row_idx')
-            if not row_idx:
-                _, row_idx = gm.get_user_by_id(session['user_id'])
-            
-            # 2. 위치 정보가 확인되면 업데이트
-            if row_idx:
-                if gm.update_nickname(row_idx, new_nick):
-                    session['nickname'] = new_nick # 세션도 즉시 업데이트 (화면 반영)
-                    flash("닉네임 변경 완료!")
-                else:
-                    flash("변경 실패 (DB 오류)")
+            # ID를 이용해 직접 찾아서 변경 (위치 정보 의존 X)
+            if gm.update_nickname(session['user_id'], new_nick):
+                session['nickname'] = new_nick # 세션 즉시 반영
+                flash("닉네임 변경 완료!")
             else:
-                flash("사용자 정보를 찾을 수 없습니다.")
+                flash("변경 실패 (DB 오류)")
     return redirect(url_for('lobby'))
 
 @app.route('/dungeon/edit_text', methods=['GET', 'POST'])
