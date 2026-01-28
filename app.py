@@ -143,18 +143,14 @@ class GoogleSheetManager:
             if filename.endswith('.html') or '<html' in raw_text[:100].lower():
                 tr_pattern = re.compile(r'<tr[^>]*>(.*?)</tr>', re.DOTALL | re.IGNORECASE)
                 td_pattern = re.compile(r'<td[^>]*>(.*?)</td>', re.DOTALL | re.IGNORECASE)
-                
                 rows = tr_pattern.findall(raw_text)
-                
                 for row_content in rows:
                     cols = td_pattern.findall(row_content)
                     if len(cols) >= 3:
                         prefixes = ['제', '령', '규']
-                        
                         for i in range(3):
                             col_html = cols[i]
                             title_match = re.search(r'<span[^>]*class="bl"[^>]*>(.*?)</span>', col_html)
-                            
                             if title_match:
                                 raw_title = title_match.group(1).strip()
                                 clean_title = re.sub(r'<[^>]+>', '', raw_title).strip()
@@ -166,22 +162,27 @@ class GoogleSheetManager:
                                 dup_count = 0; temp_name = final_title
                                 while any(r[0] == temp_name for r in rows_to_add) or temp_name in existing:
                                     dup_count += 1; temp_name = f"{final_title}_{dup_count}"
-                                
-                                rows_to_add.append([temp_name, clean_content, creator, today])
+                                # HTML도 용량 초과 방지
+                                rows_to_add.append([temp_name, clean_content[:45000], creator, today])
 
-            # [텍스트 처리 로직] - 강제 분할 삭제, 기존 빈 줄 분할 유지
+            # [텍스트 처리 로직]
             else:
                 f_stream = StringIO(raw_text)
                 normalized_text = raw_text.replace('\r\n', '\n')
                 
-                # 기본 분류
                 base_category = "제"
                 if "시행규칙" in title_prefix: base_category = "규"
                 elif "시행령" in title_prefix: base_category = "령"
                 
-                # [수정] 오직 빈 줄(\n\n)로만 나눕니다.
+                # 빈 줄(\n\n) 기준으로 분할
                 blocks = re.split(r'\n\s*\n', normalized_text)
+                blocks = [b.strip() for b in blocks if b.strip()]
                 
+                # [안전장치] 만약 빈 줄이 없어서 1개 덩어리인데 너무 길면(5000자 이상), 줄바꿈 단위로라도 자름
+                if len(blocks) == 1 and len(blocks[0]) > 5000:
+                     blocks = normalized_text.split('\n')
+                     blocks = [b.strip() for b in blocks if b.strip()]
+
                 for block in blocks:
                     clean_block = block.strip()
                     if not clean_block: continue
@@ -189,7 +190,6 @@ class GoogleSheetManager:
                     first_line = clean_block.split('\n')[0].strip()
                     snippet = first_line[:15].replace(" ", "").replace('/', '').replace(':', '')
                     
-                    # 2차 분류: 내용 기반 오버라이드
                     current_prefix = base_category
                     if re.match(r'^(령|영\s|시행령)', first_line): current_prefix = "령"
                     elif re.match(r'^(규|규칙|시행규칙)', first_line): current_prefix = "규"
@@ -200,7 +200,8 @@ class GoogleSheetManager:
                     while any(r[0] == temp_name for r in rows_to_add) or temp_name in existing:
                         dup_count += 1; temp_name = f"{q_name}_{dup_count}"
                     
-                    rows_to_add.append([temp_name, clean_block, creator, today])
+                    # [핵심] 셀 용량 초과 방지 (45000자 제한)
+                    rows_to_add.append([temp_name, clean_block[:45000], creator, today])
             
             if rows_to_add: 
                 self.quests_ws.append_rows(rows_to_add)
@@ -391,95 +392,6 @@ class GoogleSheetManager:
             self.users_ws.update_cell(row_idx, 4, new_xp)
             return u_lv, new_xp
 
-    def update_quest_content(self, quest_name, new_content):
-        if not self.ensure_connection(): return False
-        try:
-            cell = self.quests_ws.find(quest_name, in_column=1) 
-            if cell: self.quests_ws.update_cell(cell.row, 2, new_content); return True
-        except: return False
-
-    def save_mnemonic(self, user_id, quest_name, mnemonic):
-        if not self.ensure_connection(): return False
-        try:
-            records = self.get_safe_records(self.abbrev_ws)
-            for i, r in enumerate(records):
-                if str(r.get('user_id')) == str(user_id) and r.get('quest_name') == quest_name:
-                    self.abbrev_ws.update_cell(i + 2, 3, mnemonic)
-                    return True
-            self.abbrev_ws.append_row([user_id, quest_name, mnemonic, str(datetime.date.today())])
-            return True
-        except: return False
-
-    def get_mnemonic(self, user_id, quest_name):
-        if not self.ensure_connection(): return None
-        records = self.get_safe_records(self.abbrev_ws)
-        for r in records:
-            if str(r.get('user_id')) == str(user_id) and r.get('quest_name') == quest_name:
-                return r.get('mnemonic')
-        return None
-
-    def get_abbreviations(self, user_id):
-        if not self.ensure_connection(): return []
-        records = self.get_safe_records(self.abbrev_ws)
-        return [r for r in records if str(r.get('user_id')) == str(user_id)]
-
-    def add_abbreviation(self, user_id, term, meaning):
-        if not self.ensure_connection(): return False
-        self.abbrev_ws.append_row([user_id, term, meaning, str(datetime.date.today())])
-        return True
-
-    def delete_abbreviation(self, user_id, term):
-        if not self.ensure_connection(): return False
-        records = self.get_safe_records(self.abbrev_ws)
-        for i, r in enumerate(records):
-            if str(r.get('user_id')) == str(user_id) and r.get('term') == term:
-                self.abbrev_ws.delete_rows(i + 2); return True
-        return False
-
-    def reset_user_data(self, user_id):
-        if not self.ensure_connection(): return False
-        try:
-            col_rows = self.collections_ws.get_all_values()
-            to_del_col = [i + 1 for i, row in enumerate(col_rows) if i > 0 and str(row[0]) == str(user_id)]
-            for r in sorted(to_del_col, reverse=True): self.collections_ws.delete_rows(r)
-            abb_rows = self.abbrev_ws.get_all_values()
-            to_del_abb = [i + 1 for i, row in enumerate(abb_rows) if i > 0 and str(row[0]) == str(user_id)]
-            for r in sorted(to_del_abb, reverse=True): self.abbrev_ws.delete_rows(r)
-            ql_rows = self.quest_log_ws.get_all_values()
-            to_del_ql = [i + 1 for i, row in enumerate(ql_rows) if i > 0 and str(row[0]) == str(user_id)]
-            for r in sorted(to_del_ql, reverse=True): self.quest_log_ws.delete_rows(r)
-            cell = self.users_ws.find(user_id, in_column=1)
-            if cell:
-                self.users_ws.update_cell(cell.row, 3, 1) 
-                self.users_ws.update_cell(cell.row, 4, 0)
-            return True
-        except Exception as e:
-            print(f"Reset Error: {e}")
-            return False
-
-    def check_daily_login(self, user_id):
-        if not self.ensure_connection(): return False
-        today = str(datetime.date.today())
-        records = self.get_safe_records(self.quest_log_ws)
-        for r in records:
-            if str(r.get('user_id')) == str(user_id): return r.get('last_daily_login') == today
-        return False
-
-    def claim_daily_login(self, user_id):
-        if not self.ensure_connection(): return False, 0, 0
-        today = str(datetime.date.today())
-        records = self.get_safe_records(self.quest_log_ws)
-        found = False
-        for i, r in enumerate(records):
-            if str(r.get('user_id')) == str(user_id):
-                if r.get('last_daily_login') == today: return False, 0, 0
-                self.quest_log_ws.update_cell(i + 2, 2, today)
-                found = True
-                break
-        if not found: self.quest_log_ws.append_row([user_id, today])
-        lv, xp = self.add_xp(user_id, 50)
-        return True, lv, xp
-
     def align_quests(self, quests):
         rows = []
         current = {'law': None, 'decree': None, 'rule': None}
@@ -601,7 +513,6 @@ def zone_generate():
         
         aligned_quests, others = gm.align_quests(quests)
         
-        # [수정 완료] quests 데이터 전달 복구
         return render_template('zone_generate.html', aligned_quests=aligned_quests, others=others, my_completed=my_completed, quests=quests)
     except Exception as e:
         return f"<h3>⚠️ 생성 구역 오류</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로</a>"
