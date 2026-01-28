@@ -10,7 +10,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from authlib.integrations.flask_client import OAuth
 from werkzeug.middleware.proxy_fix import ProxyFix 
-import traceback
+import traceback # 에러 추적을 위해 필수
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'lord_of_blanks_key')
@@ -48,8 +48,12 @@ class GoogleSheetManager:
 
     def connect_db(self):
         try:
+            print("Trying to connect to Google Sheets...") # 디버그 로그
             json_creds = os.environ.get('GCP_CREDENTIALS')
-            if not json_creds: return False
+            if not json_creds: 
+                print("❌ ERROR: GCP_CREDENTIALS env var is missing.")
+                return False
+            
             creds_dict = json.loads(json_creds)
             scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
@@ -61,9 +65,11 @@ class GoogleSheetManager:
             self.quests_ws = self._get_or_create_sheet("quests", self.QUEST_HEADERS)
             self.abbrev_ws = self._get_or_create_sheet("abbreviations", self.ABBREV_HEADERS)
             self.quest_log_ws = self._get_or_create_sheet("quest_log", self.QUEST_LOG_HEADERS)
+            print("✅ DB Connection Successful")
             return True
         except Exception as e:
-            print(f"DB Error: {e}")
+            print(f"❌ DB Connection Failed: {e}")
+            print(traceback.format_exc()) # 상세 에러 로그
             return False
 
     def _get_or_create_sheet(self, title, headers):
@@ -76,20 +82,22 @@ class GoogleSheetManager:
                 ws = self.sheet.add_worksheet(title, 100, 10)
                 ws.append_row(headers)
                 return ws
-            except:
-                # 시트 생성 권한이 없거나 실패할 경우 None 반환하여 크래시 방지
-                print(f"Failed to create sheet: {title}")
+            except Exception as e:
+                print(f"❌ Failed to create sheet '{title}': {e}")
                 return None
 
     def ensure_connection(self):
         try:
-            self.users_ws.acell('A1')
-            return True
+            if self.users_ws:
+                self.users_ws.acell('A1')
+                return True
+            else:
+                return self.connect_db()
         except:
             return self.connect_db()
 
     def get_safe_records(self, worksheet):
-        if worksheet is None: return [] # 시트가 없으면 빈 리스트 반환
+        if worksheet is None: return []
         try:
             self.ensure_connection()
             rows = worksheet.get_all_values()
@@ -133,10 +141,21 @@ class GoogleSheetManager:
         return False
 
     def save_split_quests(self, title_prefix, file_obj, creator):
-        if not self.ensure_connection(): return False, 0
+        # [디버깅] 함수 시작
+        print(f"Starting save_split_quests for {title_prefix}")
+        if not self.ensure_connection(): 
+            return False, "DB Connection Failed"
+        
         try:
             today = str(datetime.date.today())
-            existing = [str(r.get('quest_name')) for r in self.get_safe_records(self.quests_ws)]
+            
+            # 여기서 에러가 나는지 확인
+            try:
+                existing_records = self.get_safe_records(self.quests_ws)
+                existing = [str(r.get('quest_name')) for r in existing_records]
+            except Exception as e:
+                return False, f"Failed to fetch existing quests: {e}"
+
             rows_to_add = []
             
             filename = file_obj.filename.lower()
@@ -146,7 +165,7 @@ class GoogleSheetManager:
             try: raw_text = raw_data.decode('utf-8')
             except: raw_text = raw_data.decode('cp949', errors='ignore')
 
-            # [HTML 파싱]
+            # [HTML 파싱 로직]
             if filename.endswith('.html') or '<html' in raw_text[:100].lower():
                 tr_pattern = re.compile(r'<tr[^>]*>(.*?)</tr>', re.DOTALL | re.IGNORECASE)
                 td_pattern = re.compile(r'<td[^>]*>(.*?)</td>', re.DOTALL | re.IGNORECASE)
@@ -167,9 +186,9 @@ class GoogleSheetManager:
                                 dup_count = 0; temp_name = final_title
                                 while any(r[0] == temp_name for r in rows_to_add) or temp_name in existing:
                                     dup_count += 1; temp_name = f"{final_title}_{dup_count}"
-                                rows_to_add.append([temp_name, clean_content[:45000], creator, today]) # 용량 제한
+                                rows_to_add.append([temp_name, clean_content[:45000], creator, today])
 
-            # [텍스트 파싱]
+            # [텍스트 처리 로직]
             else:
                 f_stream = StringIO(raw_text)
                 normalized_text = raw_text.replace('\r\n', '\n')
@@ -177,7 +196,7 @@ class GoogleSheetManager:
                 if "시행규칙" in title_prefix: base_category = "규"
                 elif "시행령" in title_prefix: base_category = "령"
                 
-                # 빈 줄(\n\n) 기준으로만 분할 (요청사항 반영)
+                # 빈 줄(\n\n) 기준으로 분할
                 blocks = re.split(r'\n\s*\n', normalized_text)
                 blocks = [b.strip() for b in blocks if b.strip()]
                 
@@ -194,16 +213,21 @@ class GoogleSheetManager:
                     dup_count = 0; temp_name = q_name
                     while any(r[0] == temp_name for r in rows_to_add) or temp_name in existing:
                         dup_count += 1; temp_name = f"{q_name}_{dup_count}"
-                    rows_to_add.append([temp_name, clean_block[:45000], creator, today]) # 용량 제한
+                    rows_to_add.append([temp_name, clean_block[:45000], creator, today])
             
             if rows_to_add: 
+                # 여기서 에러가 날 수 있음 (API 용량 등)
                 self.quests_ws.append_rows(rows_to_add)
                 return True, len(rows_to_add)
-            return False, 0
+            
+            return False, "추출된 카드가 없습니다 (파일 형식 확인)"
+            
         except Exception as e: 
-            print(f"Error: {e}")
-            traceback.print_exc()
-            return False, 0
+            # [디버깅] 상세 에러 리턴
+            error_msg = f"{str(e)}"
+            print(f"❌ Critical Error in save_split_quests: {error_msg}")
+            print(traceback.format_exc())
+            return False, error_msg
 
     def delete_quest_group(self, prefix):
         if not self.ensure_connection(): return False
@@ -370,7 +394,7 @@ class GoogleSheetManager:
             user_data, row_idx = self.get_user_by_id(user_id)
             if not user_data: return 1, 0
         try:
-            u_xp = int(user_data.get('xp', 0) or 0) # KeyError 방지
+            u_xp = int(user_data.get('xp', 0) or 0)
             u_lv = int(user_data.get('level', 1) or 1)
             new_xp = u_xp + amount
             req = u_lv * 100
@@ -441,7 +465,7 @@ def google_callback():
 def lobby():
     if 'user_id' not in session: return redirect(url_for('index'))
     user, _ = gm.get_user_by_id(session['user_id'])
-    # [핵심] 로그인 오류 방지: DB 실패 시 기본값 사용
+    # 로그인 오류 방지용 기본값
     if user: 
         session['level'] = user.get('level', 1)
         session['xp'] = user.get('xp', 0)
@@ -455,7 +479,6 @@ def lobby():
 
     daily_checked = gm.check_daily_login(session['user_id'])
     
-    # KeyError 방지를 위한 .get 사용
     return render_template('lobby.html', 
                            level=session.get('level', 1), 
                            xp=session.get('xp', 0), 
@@ -505,9 +528,10 @@ def zone_generate():
                 else: flash("수정 실패")
             elif 'new_q_file' in request.files:
                 f = request.files['new_q_file']
-                ok, cnt = gm.save_split_quests(request.form['new_q_name'], f, session['user_id'])
-                if ok: flash(f"{cnt}개 생성 완료!")
-                else: flash("생성 실패: 파일 형식을 확인해주세요.")
+                # [디버깅] 상세 결과 리턴받기
+                ok, result = gm.save_split_quests(request.form['new_q_name'], f, session['user_id'])
+                if ok: flash(f"{result}개 생성 완료!")
+                else: flash(f"생성 실패: {result}")
             elif 'merge_targets' in request.form:
                 targets = request.form.getlist('merge_targets')
                 if len(targets) > 1:
@@ -521,9 +545,9 @@ def zone_generate():
         
         aligned_quests, others = gm.align_quests(quests)
         
-        # [수정 완료] quests=quests 포함
         return render_template('zone_generate.html', aligned_quests=aligned_quests, others=others, my_completed=my_completed, quests=quests)
     except Exception as e:
+        # [디버깅] 화면에 에러 표시
         return f"<h3>⚠️ 생성 구역 오류</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로</a>"
 
 @app.route('/maker', methods=['GET', 'POST'])
