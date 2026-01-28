@@ -129,19 +129,15 @@ class GoogleSheetManager:
             return True
         except: return False
 
-    # [핵심 수정] ID로 직접 찾아서 수정하는 확실한 방법
     def update_nickname(self, user_id, new_nick):
         if not self.ensure_connection(): return False
         try:
-            # 1열(user_id)에서 해당 유저 찾기
             cell = self.users_ws.find(user_id, in_column=1)
             if cell:
-                # 찾은 행의 8번째 열(nickname) 수정
                 self.users_ws.update_cell(cell.row, 8, new_nick)
                 return True
             return False
         except Exception as e:
-            print(f"Nick Update Error: {e}")
             return False
 
     def save_split_quests(self, title_prefix, file_obj, creator):
@@ -158,27 +154,60 @@ class GoogleSheetManager:
             try: raw_text = raw_data.decode('utf-8')
             except: raw_text = raw_data.decode('cp949', errors='ignore')
 
+            # [HTML 파싱 로직 개선]
             if filename.endswith('.html') or '<html' in raw_text[:100].lower():
+                # 행(tr) 추출
                 tr_pattern = re.compile(r'<tr[^>]*>(.*?)</tr>', re.DOTALL | re.IGNORECASE)
+                # 열(td) 추출 (더 유연하게)
                 td_pattern = re.compile(r'<td[^>]*>(.*?)</td>', re.DOTALL | re.IGNORECASE)
+                
                 rows = tr_pattern.findall(raw_text)
+                count_laws = 0
+                
                 for row_content in rows:
                     cols = td_pattern.findall(row_content)
+                    
+                    # 3단 구조인 경우
                     if len(cols) >= 3:
                         prefixes = ['제', '령', '규']
+                        
                         for i in range(3):
                             col_html = cols[i]
+                            # 1. HTML 태그 제거하고 순수 텍스트 확인
+                            clean_text = re.sub(r'<[^>]+>', ' ', col_html).strip()
+                            clean_text = re.sub(r'\s+', ' ', clean_text).strip() # 공백 정리
+                            
+                            # 내용이 없으면 스킵
+                            if not clean_text or len(clean_text) < 2:
+                                continue
+                                
+                            # 2. 제목 추출 (<span class="bl"> 시도)
                             title_match = re.search(r'<span[^>]*class="bl"[^>]*>(.*?)</span>', col_html)
+                            
                             if title_match:
                                 raw_title = title_match.group(1).strip()
                                 clean_title = re.sub(r'<[^>]+>', '', raw_title).strip()
-                                clean_content = re.sub(r'<[^>]+>', '\n', col_html)
-                                clean_content = re.sub(r'\n+', '\n', clean_content).strip()
-                                final_title = f"{prefixes[i]}-{title_prefix}-{clean_title}"
-                                dup_count = 0; temp_name = final_title
-                                while any(r[0] == temp_name for r in rows_to_add) or temp_name in existing:
-                                    dup_count += 1; temp_name = f"{final_title}_{dup_count}"
-                                rows_to_add.append([temp_name, clean_content[:45000], creator, today])
+                            else:
+                                # 제목 태그가 없으면 앞부분 15자를 제목으로 사용
+                                clean_title = clean_text[:15].replace(" ", "").replace('/', '').replace(':', '')
+
+                            # 3. 본문 정리 (태그를 줄바꿈으로 변환)
+                            clean_content = re.sub(r'<br\s*/?>', '\n', col_html)
+                            clean_content = re.sub(r'</p>', '\n', clean_content)
+                            clean_content = re.sub(r'<[^>]+>', '', clean_content)
+                            clean_content = re.sub(r'\n+', '\n', clean_content).strip()
+
+                            final_title = f"{prefixes[i]}-{title_prefix}-{clean_title}"
+                            
+                            # 4. 중복 방지 및 추가
+                            dup_count = 0; temp_name = final_title
+                            while any(r[0] == temp_name for r in rows_to_add) or temp_name in existing:
+                                dup_count += 1; temp_name = f"{final_title}_{dup_count}"
+                            
+                            rows_to_add.append([temp_name, clean_content[:45000], creator, today])
+                            count_laws += 1
+
+            # [텍스트 파싱]
             else:
                 f_stream = StringIO(raw_text)
                 normalized_text = raw_text.replace('\r\n', '\n')
@@ -206,8 +235,9 @@ class GoogleSheetManager:
             if rows_to_add: 
                 self.quests_ws.append_rows(rows_to_add)
                 return True, len(rows_to_add)
-            return False, "추출된 내용이 없습니다."
-        except Exception as e: return False, str(e)
+            return False, "추출된 내용이 없습니다. (파일 형식 확인)"
+        except Exception as e: 
+            return False, str(e)
 
     def delete_quest_group(self, prefix):
         if not self.ensure_connection(): return False
@@ -380,93 +410,6 @@ class GoogleSheetManager:
             self.users_ws.update_cell(row_idx, 3, u_lv)
             self.users_ws.update_cell(row_idx, 4, new_xp)
             return u_lv, new_xp
-
-    def update_quest_content(self, quest_name, new_content):
-        if not self.ensure_connection(): return False
-        try:
-            cell = self.quests_ws.find(quest_name, in_column=1) 
-            if cell: self.quests_ws.update_cell(cell.row, 2, new_content); return True
-        except: return False
-
-    def save_mnemonic(self, user_id, quest_name, mnemonic):
-        if not self.ensure_connection(): return False
-        try:
-            records = self.get_safe_records(self.abbrev_ws)
-            for i, r in enumerate(records):
-                if str(r.get('user_id')) == str(user_id) and r.get('quest_name') == quest_name:
-                    self.abbrev_ws.update_cell(i + 2, 3, mnemonic)
-                    return True
-            self.abbrev_ws.append_row([user_id, quest_name, mnemonic, str(datetime.date.today())])
-            return True
-        except: return False
-
-    def get_mnemonic(self, user_id, quest_name):
-        if not self.ensure_connection(): return None
-        records = self.get_safe_records(self.abbrev_ws)
-        for r in records:
-            if str(r.get('user_id')) == str(user_id) and r.get('quest_name') == quest_name:
-                return r.get('mnemonic')
-        return None
-
-    def get_abbreviations(self, user_id):
-        if not self.ensure_connection(): return []
-        records = self.get_safe_records(self.abbrev_ws)
-        return [r for r in records if str(r.get('user_id')) == str(user_id)]
-
-    def add_abbreviation(self, user_id, term, meaning):
-        if not self.ensure_connection(): return False
-        self.abbrev_ws.append_row([user_id, term, meaning, str(datetime.date.today())])
-        return True
-
-    def delete_abbreviation(self, user_id, term):
-        if not self.ensure_connection(): return False
-        records = self.get_safe_records(self.abbrev_ws)
-        for i, r in enumerate(records):
-            if str(r.get('user_id')) == str(user_id) and r.get('term') == term:
-                self.abbrev_ws.delete_rows(i + 2); return True
-        return False
-
-    def reset_user_data(self, user_id):
-        if not self.ensure_connection(): return False
-        try:
-            col_rows = self.collections_ws.get_all_values()
-            to_del_col = [i + 1 for i, row in enumerate(col_rows) if i > 0 and str(row[0]) == str(user_id)]
-            for r in sorted(to_del_col, reverse=True): self.collections_ws.delete_rows(r)
-            abb_rows = self.abbrev_ws.get_all_values()
-            to_del_abb = [i + 1 for i, row in enumerate(abb_rows) if i > 0 and str(row[0]) == str(user_id)]
-            for r in sorted(to_del_abb, reverse=True): self.abbrev_ws.delete_rows(r)
-            ql_rows = self.quest_log_ws.get_all_values()
-            to_del_ql = [i + 1 for i, row in enumerate(ql_rows) if i > 0 and str(row[0]) == str(user_id)]
-            for r in sorted(to_del_ql, reverse=True): self.quest_log_ws.delete_rows(r)
-            cell = self.users_ws.find(user_id, in_column=1)
-            if cell:
-                self.users_ws.update_cell(cell.row, 3, 1) 
-                self.users_ws.update_cell(cell.row, 4, 0)
-            return True
-        except Exception as e: return False
-
-    def check_daily_login(self, user_id):
-        if not self.ensure_connection(): return False
-        today = str(datetime.date.today())
-        records = self.get_safe_records(self.quest_log_ws)
-        for r in records:
-            if str(r.get('user_id')) == str(user_id): return r.get('last_daily_login') == today
-        return False
-
-    def claim_daily_login(self, user_id):
-        if not self.ensure_connection(): return False, 0, 0
-        today = str(datetime.date.today())
-        records = self.get_safe_records(self.quest_log_ws)
-        found = False
-        for i, r in enumerate(records):
-            if str(r.get('user_id')) == str(user_id):
-                if r.get('last_daily_login') == today: return False, 0, 0
-                self.quest_log_ws.update_cell(i + 2, 2, today)
-                found = True
-                break
-        if not found: self.quest_log_ws.append_row([user_id, today])
-        lv, xp = self.add_xp(user_id, 50)
-        return True, lv, xp
 
     def align_quests(self, quests):
         law_groups = {} 
