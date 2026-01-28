@@ -207,7 +207,6 @@ class GoogleSheetManager:
             to_del = []
             for i, r in enumerate(records):
                 q_name = str(r.get('quest_name'))
-                # 법령 이름이 포함된 모든 카드 삭제
                 if f"-{prefix}-" in q_name:
                     to_del.append(i + 2)
             for idx in sorted(to_del, reverse=True): self.quests_ws.delete_rows(idx)
@@ -460,32 +459,23 @@ class GoogleSheetManager:
         lv, xp = self.add_xp(user_id, 50)
         return True, lv, xp
 
-    # [핵심 수정] 법령 이름별 그룹화 + Waterfall 정렬
     def align_quests(self, quests):
-        # 1. 법령 이름별로 모으기 (예: '국민건강보험법'끼리, '형법'끼리)
-        law_groups = {} # { '법령명': [카드1, 카드2...] }
+        law_groups = {} 
         others = []
-
         for q in quests:
             name = q.get('quest_name', '')
             parts = name.split('-')
-            
-            # 형식: 제-법령명-내용 (3단 이상)
             if len(parts) >= 3:
-                law_name = parts[1] # 가운데가 법령 이름
-                if law_name not in law_groups:
-                    law_groups[law_name] = []
+                law_name = parts[1]
+                if law_name not in law_groups: law_groups[law_name] = []
                 law_groups[law_name].append(q)
             else:
                 others.append(q)
 
-        # 2. 각 법령 그룹 내에서 Waterfall 정렬 수행
-        final_structure = {} # { '법령명': [Row1, Row2...] }
-        
+        final_structure = {}
         for law_name, items in law_groups.items():
             rows = []
             current = {'law': None, 'decree': None, 'rule': None}
-            
             for q in items:
                 name = q.get('quest_name', '')
                 if name.startswith('제-'):
@@ -504,14 +494,10 @@ class GoogleSheetManager:
                         current = {'law': None, 'decree': None, 'rule': None}
                     current['rule'] = q
                 else:
-                    # 분류 불가 카드는 others로
                     others.append(q)
-            
             if current['law'] or current['decree'] or current['rule']:
                 rows.append(current)
-            
             final_structure[law_name] = rows
-
         return final_structure, others
 
 gm = GoogleSheetManager()
@@ -542,19 +528,30 @@ def google_callback():
 @app.route('/lobby')
 def lobby():
     if 'user_id' not in session: return redirect(url_for('index'))
-    user, _ = gm.get_user_by_id(session['user_id'])
+    user, row_idx = gm.get_user_by_id(session['user_id'])
+    
     if user: 
         session['level'] = user.get('level', 1)
         session['xp'] = user.get('xp', 0)
         session['nickname'] = user.get('nickname', '요원')
         session['points'] = user.get('points', 0)
+        # [핵심] 위치 정보가 있으면 세션에 확실히 저장
+        if row_idx: session['user_row_idx'] = row_idx
     else:
         session['level'] = session.get('level', 1)
         session['xp'] = session.get('xp', 0)
         session['nickname'] = session.get('nickname', '요원')
         session['points'] = 0
+
     daily_checked = gm.check_daily_login(session['user_id'])
-    return render_template('lobby.html', level=session.get('level', 1), xp=session.get('xp', 0), points=session.get('points', 0), nickname=session.get('nickname', '요원'), req_xp=session.get('level', 1)*100, daily_checked=daily_checked)
+    
+    return render_template('lobby.html', 
+                           level=session.get('level', 1), 
+                           xp=session.get('xp', 0), 
+                           points=session.get('points', 0), 
+                           nickname=session.get('nickname', '요원'), 
+                           req_xp=session.get('level', 1)*100, 
+                           daily_checked=daily_checked)
 
 @app.route('/logout')
 def logout():
@@ -762,9 +759,26 @@ def play_game():
             return redirect(url_for(f"zone_{return_zone}"))
         except Exception as e: return f"<h3>⚠️ 오류 발생</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로 돌아가기</a>"
 
+# [핵심 수정] 닉네임 변경 기능 강화
 @app.route('/update_nickname', methods=['POST'])
 def update_nickname():
-    if 'user_id' in session: gm.update_nickname(session['user_row_idx'], request.form.get('new_nickname'))
+    if 'user_id' in session:
+        new_nick = request.form.get('new_nickname')
+        if new_nick:
+            # 1. 세션에 위치 정보가 없으면 DB에서 다시 조회 (안전장치)
+            row_idx = session.get('user_row_idx')
+            if not row_idx:
+                _, row_idx = gm.get_user_by_id(session['user_id'])
+            
+            # 2. 위치 정보가 확인되면 업데이트
+            if row_idx:
+                if gm.update_nickname(row_idx, new_nick):
+                    session['nickname'] = new_nick # 세션도 즉시 업데이트 (화면 반영)
+                    flash("닉네임 변경 완료!")
+                else:
+                    flash("변경 실패 (DB 오류)")
+            else:
+                flash("사용자 정보를 찾을 수 없습니다.")
     return redirect(url_for('lobby'))
 
 @app.route('/dungeon/edit_text', methods=['GET', 'POST'])
@@ -774,7 +788,8 @@ def edit_quest_text(): return redirect(url_for('lobby'))
 def abbreviations():
     if 'user_id' not in session: return redirect(url_for('index'))
     if request.method == 'POST':
-        if 'delete_term' in request.form: gm.delete_abbreviation(session['user_id'], request.form['delete_term'])
+        if 'delete_term' in request.form:
+            gm.delete_abbreviation(session['user_id'], request.form['delete_term'])
         else: gm.add_abbreviation(session['user_id'], request.form.get('term'), request.form.get('meaning'))
         return redirect(url_for('abbreviations'))
     return render_template('abbreviations.html', abbrevs=gm.get_abbreviations(session['user_id']))
