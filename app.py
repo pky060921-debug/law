@@ -10,11 +10,31 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from authlib.integrations.flask_client import OAuth
 from werkzeug.middleware.proxy_fix import ProxyFix 
-import traceback # 에러 추적을 위해 필수
+from werkzeug.exceptions import HTTPException # 에러 핸들링용
+import traceback # 상세 에러 추적용
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'lord_of_blanks_key')
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
+# [핵심] 모든 에러를 화면에 출력하는 디버거 핸들러
+@app.errorhandler(Exception)
+def handle_exception(e):
+    # HTTP 기본 에러는 통과
+    if isinstance(e, HTTPException):
+        return e
+    # 그 외 파이썬 내부 에러(500 등)는 상세 내용을 화면에 출력
+    err_msg = traceback.format_exc()
+    return f"""
+    <div style="padding:20px; background:#2c3e50; color:white; font-family:monospace;">
+        <h2 style="color:#e74c3c;">⚠️ 서버 내부 오류 발생 (디버깅 모드)</h2>
+        <p>아래 내용을 복사해서 개발자에게 알려주세요.</p>
+        <hr style="border-color:#555;">
+        <pre style="white-space: pre-wrap; word-break: break-all; color:#ecf0f1;">{err_msg}</pre>
+        <br>
+        <a href="/lobby" style="color:#f39c12;">[로비로 돌아가기 시도]</a>
+    </div>
+    """, 500
 
 # --- 구글 OAuth ---
 app.config['GOOGLE_CLIENT_ID'] = os.environ.get('GOOGLE_CLIENT_ID')
@@ -48,12 +68,8 @@ class GoogleSheetManager:
 
     def connect_db(self):
         try:
-            print("Trying to connect to Google Sheets...") # 디버그 로그
             json_creds = os.environ.get('GCP_CREDENTIALS')
-            if not json_creds: 
-                print("❌ ERROR: GCP_CREDENTIALS env var is missing.")
-                return False
-            
+            if not json_creds: return False
             creds_dict = json.loads(json_creds)
             scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
@@ -65,11 +81,9 @@ class GoogleSheetManager:
             self.quests_ws = self._get_or_create_sheet("quests", self.QUEST_HEADERS)
             self.abbrev_ws = self._get_or_create_sheet("abbreviations", self.ABBREV_HEADERS)
             self.quest_log_ws = self._get_or_create_sheet("quest_log", self.QUEST_LOG_HEADERS)
-            print("✅ DB Connection Successful")
             return True
         except Exception as e:
-            print(f"❌ DB Connection Failed: {e}")
-            print(traceback.format_exc()) # 상세 에러 로그
+            print(f"DB Error: {e}")
             return False
 
     def _get_or_create_sheet(self, title, headers):
@@ -82,17 +96,12 @@ class GoogleSheetManager:
                 ws = self.sheet.add_worksheet(title, 100, 10)
                 ws.append_row(headers)
                 return ws
-            except Exception as e:
-                print(f"❌ Failed to create sheet '{title}': {e}")
-                return None
+            except: return None
 
     def ensure_connection(self):
         try:
-            if self.users_ws:
-                self.users_ws.acell('A1')
-                return True
-            else:
-                return self.connect_db()
+            self.users_ws.acell('A1')
+            return True
         except:
             return self.connect_db()
 
@@ -141,21 +150,10 @@ class GoogleSheetManager:
         return False
 
     def save_split_quests(self, title_prefix, file_obj, creator):
-        # [디버깅] 함수 시작
-        print(f"Starting save_split_quests for {title_prefix}")
-        if not self.ensure_connection(): 
-            return False, "DB Connection Failed"
-        
+        if not self.ensure_connection(): return False, "DB 접속 실패"
         try:
             today = str(datetime.date.today())
-            
-            # 여기서 에러가 나는지 확인
-            try:
-                existing_records = self.get_safe_records(self.quests_ws)
-                existing = [str(r.get('quest_name')) for r in existing_records]
-            except Exception as e:
-                return False, f"Failed to fetch existing quests: {e}"
-
+            existing = [str(r.get('quest_name')) for r in self.get_safe_records(self.quests_ws)]
             rows_to_add = []
             
             filename = file_obj.filename.lower()
@@ -165,7 +163,6 @@ class GoogleSheetManager:
             try: raw_text = raw_data.decode('utf-8')
             except: raw_text = raw_data.decode('cp949', errors='ignore')
 
-            # [HTML 파싱 로직]
             if filename.endswith('.html') or '<html' in raw_text[:100].lower():
                 tr_pattern = re.compile(r'<tr[^>]*>(.*?)</tr>', re.DOTALL | re.IGNORECASE)
                 td_pattern = re.compile(r'<td[^>]*>(.*?)</td>', re.DOTALL | re.IGNORECASE)
@@ -187,8 +184,6 @@ class GoogleSheetManager:
                                 while any(r[0] == temp_name for r in rows_to_add) or temp_name in existing:
                                     dup_count += 1; temp_name = f"{final_title}_{dup_count}"
                                 rows_to_add.append([temp_name, clean_content[:45000], creator, today])
-
-            # [텍스트 처리 로직]
             else:
                 f_stream = StringIO(raw_text)
                 normalized_text = raw_text.replace('\r\n', '\n')
@@ -196,14 +191,12 @@ class GoogleSheetManager:
                 if "시행규칙" in title_prefix: base_category = "규"
                 elif "시행령" in title_prefix: base_category = "령"
                 
-                # 빈 줄(\n\n) 기준으로 분할
                 blocks = re.split(r'\n\s*\n', normalized_text)
                 blocks = [b.strip() for b in blocks if b.strip()]
                 
                 for block in blocks:
                     clean_block = block.strip()
                     if not clean_block: continue
-                    
                     first_line = clean_block.split('\n')[0].strip()
                     snippet = first_line[:15].replace(" ", "").replace('/', '').replace(':', '')
                     current_prefix = base_category
@@ -216,18 +209,11 @@ class GoogleSheetManager:
                     rows_to_add.append([temp_name, clean_block[:45000], creator, today])
             
             if rows_to_add: 
-                # 여기서 에러가 날 수 있음 (API 용량 등)
                 self.quests_ws.append_rows(rows_to_add)
                 return True, len(rows_to_add)
-            
-            return False, "추출된 카드가 없습니다 (파일 형식 확인)"
-            
+            return False, "추출된 내용이 없습니다."
         except Exception as e: 
-            # [디버깅] 상세 에러 리턴
-            error_msg = f"{str(e)}"
-            print(f"❌ Critical Error in save_split_quests: {error_msg}")
-            print(traceback.format_exc())
-            return False, error_msg
+            return False, str(e)
 
     def delete_quest_group(self, prefix):
         if not self.ensure_connection(): return False
@@ -409,6 +395,95 @@ class GoogleSheetManager:
             self.users_ws.update_cell(row_idx, 4, new_xp)
             return u_lv, new_xp
 
+    def update_quest_content(self, quest_name, new_content):
+        if not self.ensure_connection(): return False
+        try:
+            cell = self.quests_ws.find(quest_name, in_column=1) 
+            if cell: self.quests_ws.update_cell(cell.row, 2, new_content); return True
+        except: return False
+
+    def save_mnemonic(self, user_id, quest_name, mnemonic):
+        if not self.ensure_connection(): return False
+        try:
+            records = self.get_safe_records(self.abbrev_ws)
+            for i, r in enumerate(records):
+                if str(r.get('user_id')) == str(user_id) and r.get('quest_name') == quest_name:
+                    self.abbrev_ws.update_cell(i + 2, 3, mnemonic)
+                    return True
+            self.abbrev_ws.append_row([user_id, quest_name, mnemonic, str(datetime.date.today())])
+            return True
+        except: return False
+
+    def get_mnemonic(self, user_id, quest_name):
+        if not self.ensure_connection(): return None
+        records = self.get_safe_records(self.abbrev_ws)
+        for r in records:
+            if str(r.get('user_id')) == str(user_id) and r.get('quest_name') == quest_name:
+                return r.get('mnemonic')
+        return None
+
+    def get_abbreviations(self, user_id):
+        if not self.ensure_connection(): return []
+        records = self.get_safe_records(self.abbrev_ws)
+        return [r for r in records if str(r.get('user_id')) == str(user_id)]
+
+    def add_abbreviation(self, user_id, term, meaning):
+        if not self.ensure_connection(): return False
+        self.abbrev_ws.append_row([user_id, term, meaning, str(datetime.date.today())])
+        return True
+
+    def delete_abbreviation(self, user_id, term):
+        if not self.ensure_connection(): return False
+        records = self.get_safe_records(self.abbrev_ws)
+        for i, r in enumerate(records):
+            if str(r.get('user_id')) == str(user_id) and r.get('term') == term:
+                self.abbrev_ws.delete_rows(i + 2); return True
+        return False
+
+    def reset_user_data(self, user_id):
+        if not self.ensure_connection(): return False
+        try:
+            col_rows = self.collections_ws.get_all_values()
+            to_del_col = [i + 1 for i, row in enumerate(col_rows) if i > 0 and str(row[0]) == str(user_id)]
+            for r in sorted(to_del_col, reverse=True): self.collections_ws.delete_rows(r)
+            abb_rows = self.abbrev_ws.get_all_values()
+            to_del_abb = [i + 1 for i, row in enumerate(abb_rows) if i > 0 and str(row[0]) == str(user_id)]
+            for r in sorted(to_del_abb, reverse=True): self.abbrev_ws.delete_rows(r)
+            ql_rows = self.quest_log_ws.get_all_values()
+            to_del_ql = [i + 1 for i, row in enumerate(ql_rows) if i > 0 and str(row[0]) == str(user_id)]
+            for r in sorted(to_del_ql, reverse=True): self.quest_log_ws.delete_rows(r)
+            cell = self.users_ws.find(user_id, in_column=1)
+            if cell:
+                self.users_ws.update_cell(cell.row, 3, 1) 
+                self.users_ws.update_cell(cell.row, 4, 0)
+            return True
+        except Exception as e:
+            print(f"Reset Error: {e}")
+            return False
+
+    def check_daily_login(self, user_id):
+        if not self.ensure_connection(): return False
+        today = str(datetime.date.today())
+        records = self.get_safe_records(self.quest_log_ws)
+        for r in records:
+            if str(r.get('user_id')) == str(user_id): return r.get('last_daily_login') == today
+        return False
+
+    def claim_daily_login(self, user_id):
+        if not self.ensure_connection(): return False, 0, 0
+        today = str(datetime.date.today())
+        records = self.get_safe_records(self.quest_log_ws)
+        found = False
+        for i, r in enumerate(records):
+            if str(r.get('user_id')) == str(user_id):
+                if r.get('last_daily_login') == today: return False, 0, 0
+                self.quest_log_ws.update_cell(i + 2, 2, today)
+                found = True
+                break
+        if not found: self.quest_log_ws.append_row([user_id, today])
+        lv, xp = self.add_xp(user_id, 50)
+        return True, lv, xp
+
     def align_quests(self, quests):
         rows = []
         current = {'law': None, 'decree': None, 'rule': None}
@@ -465,7 +540,8 @@ def google_callback():
 def lobby():
     if 'user_id' not in session: return redirect(url_for('index'))
     user, _ = gm.get_user_by_id(session['user_id'])
-    # 로그인 오류 방지용 기본값
+    
+    # [핵심 수정] 로그인 오류 방지: DB 정보가 없으면 기본값으로 대체
     if user: 
         session['level'] = user.get('level', 1)
         session['xp'] = user.get('xp', 0)
@@ -514,41 +590,37 @@ def claim_daily_login():
 @app.route('/zone/generate', methods=['GET', 'POST'])
 def zone_generate():
     if 'user_id' not in session: return redirect(url_for('index'))
-    try:
-        if request.method == 'POST':
-            if 'delete_group' in request.form:
-                gm.delete_quest_group(request.form['delete_group'])
-                flash("삭제되었습니다.")
-            elif 'delete_single' in request.form:
-                if gm.delete_quest_single(request.form['delete_single']): flash("삭제되었습니다.")
-                else: flash("삭제 실패")
-            elif 'rename_old' in request.form:
-                old = request.form['rename_old']; new = request.form['rename_new']
-                if gm.rename_quest(old, new): flash("제목 수정 완료!")
-                else: flash("수정 실패")
-            elif 'new_q_file' in request.files:
-                f = request.files['new_q_file']
-                # [디버깅] 상세 결과 리턴받기
-                ok, result = gm.save_split_quests(request.form['new_q_name'], f, session['user_id'])
-                if ok: flash(f"{result}개 생성 완료!")
-                else: flash(f"생성 실패: {result}")
-            elif 'merge_targets' in request.form:
-                targets = request.form.getlist('merge_targets')
-                if len(targets) > 1:
-                    if gm.merge_quests(targets, session['user_id']): flash(f"{len(targets)}개의 카드가 합쳐졌습니다!")
-                    else: flash("합치기 실패.")
-                else: flash("합칠 카드를 2개 이상 선택하세요.")
-        
-        quests = gm.get_quest_list()
-        my_progress = gm.get_my_progress(session['user_id'])
-        my_completed = [c.get('quest_name') for c in my_progress if c.get('type') == 'BLANK']
-        
-        aligned_quests, others = gm.align_quests(quests)
-        
-        return render_template('zone_generate.html', aligned_quests=aligned_quests, others=others, my_completed=my_completed, quests=quests)
-    except Exception as e:
-        # [디버깅] 화면에 에러 표시
-        return f"<h3>⚠️ 생성 구역 오류</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로</a>"
+    # 디버깅: 에러를 바로 화면에 출력 (handle_exception이 처리)
+    if request.method == 'POST':
+        if 'delete_group' in request.form:
+            gm.delete_quest_group(request.form['delete_group'])
+            flash("삭제되었습니다.")
+        elif 'delete_single' in request.form:
+            if gm.delete_quest_single(request.form['delete_single']): flash("삭제되었습니다.")
+            else: flash("삭제 실패")
+        elif 'rename_old' in request.form:
+            old = request.form['rename_old']; new = request.form['rename_new']
+            if gm.rename_quest(old, new): flash("제목 수정 완료!")
+            else: flash("수정 실패")
+        elif 'new_q_file' in request.files:
+            f = request.files['new_q_file']
+            ok, result = gm.save_split_quests(request.form['new_q_name'], f, session['user_id'])
+            if ok: flash(f"{result}개 생성 완료!")
+            else: flash(f"생성 실패: {result}")
+        elif 'merge_targets' in request.form:
+            targets = request.form.getlist('merge_targets')
+            if len(targets) > 1:
+                if gm.merge_quests(targets, session['user_id']): flash(f"{len(targets)}개의 카드가 합쳐졌습니다!")
+                else: flash("합치기 실패.")
+            else: flash("합칠 카드를 2개 이상 선택하세요.")
+    
+    quests = gm.get_quest_list()
+    my_progress = gm.get_my_progress(session['user_id'])
+    my_completed = [c.get('quest_name') for c in my_progress if c.get('type') == 'BLANK']
+    
+    aligned_quests, others = gm.align_quests(quests)
+    
+    return render_template('zone_generate.html', aligned_quests=aligned_quests, others=others, my_completed=my_completed, quests=quests)
 
 @app.route('/maker', methods=['GET', 'POST'])
 def maker():
@@ -587,69 +659,60 @@ def maker():
 @app.route('/zone/acquire', methods=['GET', 'POST'])
 def zone_acquire():
     if 'user_id' not in session: return redirect(url_for('index'))
-    try:
-        if request.method == 'POST':
-            q_name = request.form['quest_name']
-            all_q = gm.get_quest_list()
-            quest = next((q for q in all_q if q['quest_name'] == q_name), None)
-            if quest:
-                ACTIVE_GAMES[session['user_id']] = { 'mode': 'acquire', 'quest_name': q_name, 'content': quest['content'] }
-                return redirect(url_for('play_game'))
-        
-        quests = gm.get_available_quests(session['user_id'], 'acquire')
-        aligned_quests, others = gm.align_quests(quests) 
-        
-        return render_template('zone_list.html', title="획득 구역", aligned_quests=aligned_quests, others=others, mode='acquire', quests=quests)
-    except Exception as e:
-        return f"<h3>⚠️ 획득 구역 오류</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로</a>"
+    if request.method == 'POST':
+        q_name = request.form['quest_name']
+        all_q = gm.get_quest_list()
+        quest = next((q for q in all_q if q['quest_name'] == q_name), None)
+        if quest:
+            ACTIVE_GAMES[session['user_id']] = { 'mode': 'acquire', 'quest_name': q_name, 'content': quest['content'] }
+            return redirect(url_for('play_game'))
+    
+    quests = gm.get_available_quests(session['user_id'], 'acquire')
+    aligned_quests, others = gm.align_quests(quests) 
+    
+    return render_template('zone_list.html', title="획득 구역", aligned_quests=aligned_quests, others=others, mode='acquire', quests=quests)
 
 @app.route('/zone/review', methods=['GET', 'POST'])
 def zone_review():
     if 'user_id' not in session: return redirect(url_for('index'))
-    try:
-        if request.method == 'POST':
-            q_name = request.form['quest_name']
-            q_type = request.form.get('quest_type', 'BLANK')
-            cards = gm.get_available_quests(session['user_id'], 'review')
-            card = next((c for c in cards if c.get('quest_name') == q_name and c.get('type') == q_type), None)
-            if card:
-                mode = 'abbrev' if q_type == 'ABBREV' else 'review'
-                level = int(card.get('level', 1))
-                if level == 5: mode = 'register_mnemonic'
-                latest_content = gm.get_quest_content(q_name)
-                final_content = latest_content if latest_content else card['card_text']
-                ACTIVE_GAMES[session['user_id']] = { 
-                    'mode': mode, 'quest_name': q_name, 'content': final_content, 'level': level
-                }
-                return redirect(url_for('play_game'))
+    if request.method == 'POST':
+        q_name = request.form['quest_name']
+        q_type = request.form.get('quest_type', 'BLANK')
         cards = gm.get_available_quests(session['user_id'], 'review')
-        aligned_quests, others = gm.align_quests(cards) 
-        return render_template('zone_list.html', title="복습 구역", aligned_quests=aligned_quests, others=others, mode='review', quests=cards)
-    except Exception as e:
-        return f"<h3>⚠️ 복습 구역 오류 발생</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로 돌아가기</a>"
+        card = next((c for c in cards if c.get('quest_name') == q_name and c.get('type') == q_type), None)
+        if card:
+            mode = 'abbrev' if q_type == 'ABBREV' else 'review'
+            level = int(card.get('level', 1))
+            if level == 5: mode = 'register_mnemonic'
+            latest_content = gm.get_quest_content(q_name)
+            final_content = latest_content if latest_content else card['card_text']
+            ACTIVE_GAMES[session['user_id']] = { 
+                'mode': mode, 'quest_name': q_name, 'content': final_content, 'level': level
+            }
+            return redirect(url_for('play_game'))
+    cards = gm.get_available_quests(session['user_id'], 'review')
+    aligned_quests, others = gm.align_quests(cards) 
+    return render_template('zone_list.html', title="복습 구역", aligned_quests=aligned_quests, others=others, mode='review', quests=cards)
 
 @app.route('/zone/abbrev', methods=['GET', 'POST'])
 def zone_abbrev():
     if 'user_id' not in session: return redirect(url_for('index'))
-    try:
-        if request.method == 'POST':
-            q_name = request.form['quest_name']
-            cards = gm.get_available_quests(session['user_id'], 'abbrev')
-            card = next((c for c in cards if c.get('quest_name') == q_name), None)
-            if card:
-                mnemonic = gm.get_mnemonic(session['user_id'], q_name)
-                latest_content = gm.get_quest_content(q_name)
-                final_content = latest_content if latest_content else card['card_text']
-                ACTIVE_GAMES[session['user_id']] = { 
-                    'mode': 'abbrev', 'quest_name': q_name, 'content': final_content,
-                    'level': int(card.get('level', 1)), 'mnemonic': mnemonic
-                }
-                return redirect(url_for('play_game'))
+    if request.method == 'POST':
+        q_name = request.form['quest_name']
         cards = gm.get_available_quests(session['user_id'], 'abbrev')
-        aligned_quests, others = gm.align_quests(cards)
-        return render_template('zone_list.html', title="약어 훈련소", aligned_quests=aligned_quests, others=others, mode='abbrev', quests=cards)
-    except Exception as e:
-        return f"<h3>⚠️ 약어 구역 오류</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로</a>"
+        card = next((c for c in cards if c.get('quest_name') == q_name), None)
+        if card:
+            mnemonic = gm.get_mnemonic(session['user_id'], q_name)
+            latest_content = gm.get_quest_content(q_name)
+            final_content = latest_content if latest_content else card['card_text']
+            ACTIVE_GAMES[session['user_id']] = { 
+                'mode': 'abbrev', 'quest_name': q_name, 'content': final_content,
+                'level': int(card.get('level', 1)), 'mnemonic': mnemonic
+            }
+            return redirect(url_for('play_game'))
+    cards = gm.get_available_quests(session['user_id'], 'abbrev')
+    aligned_quests, others = gm.align_quests(cards)
+    return render_template('zone_list.html', title="약어 훈련소", aligned_quests=aligned_quests, others=others, mode='abbrev', quests=cards)
 
 @app.route('/play', methods=['GET', 'POST'])
 def play_game():
@@ -691,32 +754,29 @@ def play_game():
         return render_template('play.html', parts=parts, targets=targets, mode=game['mode'], title=game['quest_name'], level=current_level)
 
     elif request.method == 'POST':
-        try:
-            if game['mode'] == 'register_mnemonic':
-                user_mnemonic = request.form.get('user_mnemonic', '').strip()
-                if user_mnemonic:
-                    gm.save_mnemonic(session['user_id'], game['quest_name'], user_mnemonic)
-                    lv, xp = gm.process_result(session['user_id'], session.get('user_row_idx'), game['quest_name'], game['content'], 'review')
-                    session['level'] = lv; session['xp'] = xp
-                    flash(f"약어 '{user_mnemonic}' 저장 완료! (약어 구역에서 테스트하세요)")
-                    return redirect(url_for('zone_review'))
-                else:
-                    flash("약어를 입력해주세요.")
-                    return redirect(url_for('play_game'))
+        if game['mode'] == 'register_mnemonic':
+            user_mnemonic = request.form.get('user_mnemonic', '').strip()
+            if user_mnemonic:
+                gm.save_mnemonic(session['user_id'], game['quest_name'], user_mnemonic)
+                lv, xp = gm.process_result(session['user_id'], session.get('user_row_idx'), game['quest_name'], game['content'], 'review')
+                session['level'] = lv; session['xp'] = xp
+                flash(f"약어 '{user_mnemonic}' 저장 완료! (약어 구역에서 테스트하세요)")
+                return redirect(url_for('zone_review'))
+            else:
+                flash("약어를 입력해주세요.")
+                return redirect(url_for('play_game'))
 
-            clean = game['content']
-            if game['mode'] != 'abbrev': clean = re.sub(r'\{([^}]+)\}', r'\1', game['content'])
-            
-            lv, xp = gm.process_result(session['user_id'], session.get('user_row_idx'), game['quest_name'], clean, game['mode'])
-            session['level'] = lv; session['xp'] = xp
-            
-            if game['mode'] == 'acquire': flash("획득완료")
-            else: flash(f"학습 완료! (현재 Lv.{lv})")
-            
-            return_zone = 'review' if game['mode'] == 'review' else ('abbrev' if game['mode'] == 'abbrev' else 'acquire')
-            return redirect(url_for(f"zone_{return_zone}"))
-        except Exception as e:
-            return f"<h3>⚠️ 오류 발생</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로 돌아가기</a>"
+        clean = game['content']
+        if game['mode'] != 'abbrev': clean = re.sub(r'\{([^}]+)\}', r'\1', game['content'])
+        
+        lv, xp = gm.process_result(session['user_id'], session.get('user_row_idx'), game['quest_name'], clean, game['mode'])
+        session['level'] = lv; session['xp'] = xp
+        
+        if game['mode'] == 'acquire': flash("획득완료")
+        else: flash(f"학습 완료! (현재 Lv.{lv})")
+        
+        return_zone = 'review' if game['mode'] == 'review' else ('abbrev' if game['mode'] == 'abbrev' else 'acquire')
+        return redirect(url_for(f"zone_{return_zone}"))
 
 @app.route('/update_nickname', methods=['POST'])
 def update_nickname():
