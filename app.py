@@ -139,47 +139,67 @@ class GoogleSheetManager:
             try: raw_text = raw_data.decode('utf-8')
             except: raw_text = raw_data.decode('cp949', errors='ignore')
 
+            # [HTML 파싱 로직]
             if filename.endswith('.html') or '<html' in raw_text[:100].lower():
                 tr_pattern = re.compile(r'<tr[^>]*>(.*?)</tr>', re.DOTALL | re.IGNORECASE)
                 td_pattern = re.compile(r'<td[^>]*>(.*?)</td>', re.DOTALL | re.IGNORECASE)
+                
                 rows = tr_pattern.findall(raw_text)
+                
                 for row_content in rows:
                     cols = td_pattern.findall(row_content)
                     if len(cols) >= 3:
                         prefixes = ['제', '령', '규']
+                        
                         for i in range(3):
                             col_html = cols[i]
                             title_match = re.search(r'<span[^>]*class="bl"[^>]*>(.*?)</span>', col_html)
+                            
                             if title_match:
                                 raw_title = title_match.group(1).strip()
                                 clean_title = re.sub(r'<[^>]+>', '', raw_title).strip()
                                 clean_content = re.sub(r'<[^>]+>', '\n', col_html)
                                 clean_content = re.sub(r'\n+', '\n', clean_content).strip()
+                                
                                 final_title = f"{prefixes[i]}-{title_prefix}-{clean_title}"
+                                
                                 dup_count = 0; temp_name = final_title
                                 while any(r[0] == temp_name for r in rows_to_add) or temp_name in existing:
                                     dup_count += 1; temp_name = f"{final_title}_{dup_count}"
+                                
                                 rows_to_add.append([temp_name, clean_content, creator, today])
+
+            # [텍스트 처리 로직] - 강제 분할 삭제, 기존 빈 줄 분할 유지
             else:
                 f_stream = StringIO(raw_text)
                 normalized_text = raw_text.replace('\r\n', '\n')
+                
+                # 기본 분류
                 base_category = "제"
                 if "시행규칙" in title_prefix: base_category = "규"
                 elif "시행령" in title_prefix: base_category = "령"
                 
+                # [수정] 오직 빈 줄(\n\n)로만 나눕니다.
                 blocks = re.split(r'\n\s*\n', normalized_text)
+                
                 for block in blocks:
                     clean_block = block.strip()
                     if not clean_block: continue
+                    
                     first_line = clean_block.split('\n')[0].strip()
-                    snippet = first_line[:15].replace(" ", "").replace('/', '')
+                    snippet = first_line[:15].replace(" ", "").replace('/', '').replace(':', '')
+                    
+                    # 2차 분류: 내용 기반 오버라이드
                     current_prefix = base_category
                     if re.match(r'^(령|영\s|시행령)', first_line): current_prefix = "령"
                     elif re.match(r'^(규|규칙|시행규칙)', first_line): current_prefix = "규"
+                    
                     q_name = f"{current_prefix}-{title_prefix}-{snippet}"
+                    
                     dup_count = 0; temp_name = q_name
                     while any(r[0] == temp_name for r in rows_to_add) or temp_name in existing:
                         dup_count += 1; temp_name = f"{q_name}_{dup_count}"
+                    
                     rows_to_add.append([temp_name, clean_block, creator, today])
             
             if rows_to_add: 
@@ -460,42 +480,31 @@ class GoogleSheetManager:
         lv, xp = self.add_xp(user_id, 50)
         return True, lv, xp
 
-    # [신규] 순차적 3단 배열 로직 (Waterfall 방식)
     def align_quests(self, quests):
         rows = []
         current = {'law': None, 'decree': None, 'rule': None}
         others = []
-
         for q in quests:
             name = q.get('quest_name', '')
-            
             if name.startswith('제-'):
-                # 법률이 나오면 무조건 줄바꿈 (새 조문의 시작)
                 if current['law'] or current['decree'] or current['rule']:
                     rows.append(current)
                     current = {'law': None, 'decree': None, 'rule': None}
                 current['law'] = q
-                
             elif name.startswith('령-'):
-                # 이미 령이 있거나, 규가 있으면 (순서가 꼬인 경우) 줄바꿈
                 if current['decree'] or current['rule']:
                     rows.append(current)
                     current = {'law': None, 'decree': None, 'rule': None}
                 current['decree'] = q
-                
             elif name.startswith('규-'):
-                # 이미 규가 있으면 줄바꿈
                 if current['rule']:
                     rows.append(current)
                     current = {'law': None, 'decree': None, 'rule': None}
                 current['rule'] = q
             else:
                 others.append(q)
-        
-        # 마지막 행 추가
         if current['law'] or current['decree'] or current['rule']:
             rows.append(current)
-            
         return rows, others
 
 gm = GoogleSheetManager()
@@ -592,7 +601,8 @@ def zone_generate():
         
         aligned_quests, others = gm.align_quests(quests)
         
-        return render_template('zone_generate.html', aligned_quests=aligned_quests, others=others, my_completed=my_completed)
+        # [수정 완료] quests 데이터 전달 복구
+        return render_template('zone_generate.html', aligned_quests=aligned_quests, others=others, my_completed=my_completed, quests=quests)
     except Exception as e:
         return f"<h3>⚠️ 생성 구역 오류</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로</a>"
 
@@ -645,7 +655,7 @@ def zone_acquire():
         quests = gm.get_available_quests(session['user_id'], 'acquire')
         aligned_quests, others = gm.align_quests(quests) 
         
-        return render_template('zone_list.html', title="획득 구역", aligned_quests=aligned_quests, others=others, mode='acquire')
+        return render_template('zone_list.html', title="획득 구역", aligned_quests=aligned_quests, others=others, mode='acquire', quests=quests)
     except Exception as e:
         return f"<h3>⚠️ 획득 구역 오류</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로</a>"
 
@@ -658,24 +668,19 @@ def zone_review():
             q_type = request.form.get('quest_type', 'BLANK')
             cards = gm.get_available_quests(session['user_id'], 'review')
             card = next((c for c in cards if c.get('quest_name') == q_name and c.get('type') == q_type), None)
-            
             if card:
                 mode = 'abbrev' if q_type == 'ABBREV' else 'review'
                 level = int(card.get('level', 1))
                 if level == 5: mode = 'register_mnemonic'
-                
                 latest_content = gm.get_quest_content(q_name)
                 final_content = latest_content if latest_content else card['card_text']
-
                 ACTIVE_GAMES[session['user_id']] = { 
                     'mode': mode, 'quest_name': q_name, 'content': final_content, 'level': level
                 }
                 return redirect(url_for('play_game'))
-                
         cards = gm.get_available_quests(session['user_id'], 'review')
         aligned_quests, others = gm.align_quests(cards) 
-        
-        return render_template('zone_list.html', title="복습 구역", aligned_quests=aligned_quests, others=others, mode='review')
+        return render_template('zone_list.html', title="복습 구역", aligned_quests=aligned_quests, others=others, mode='review', quests=cards)
     except Exception as e:
         return f"<h3>⚠️ 복습 구역 오류 발생</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로 돌아가기</a>"
 
@@ -687,22 +692,18 @@ def zone_abbrev():
             q_name = request.form['quest_name']
             cards = gm.get_available_quests(session['user_id'], 'abbrev')
             card = next((c for c in cards if c.get('quest_name') == q_name), None)
-            
             if card:
                 mnemonic = gm.get_mnemonic(session['user_id'], q_name)
                 latest_content = gm.get_quest_content(q_name)
                 final_content = latest_content if latest_content else card['card_text']
-
                 ACTIVE_GAMES[session['user_id']] = { 
                     'mode': 'abbrev', 'quest_name': q_name, 'content': final_content,
                     'level': int(card.get('level', 1)), 'mnemonic': mnemonic
                 }
                 return redirect(url_for('play_game'))
-                
         cards = gm.get_available_quests(session['user_id'], 'abbrev')
         aligned_quests, others = gm.align_quests(cards)
-        
-        return render_template('zone_list.html', title="약어 훈련소", aligned_quests=aligned_quests, others=others, mode='abbrev')
+        return render_template('zone_list.html', title="약어 훈련소", aligned_quests=aligned_quests, others=others, mode='abbrev', quests=cards)
     except Exception as e:
         return f"<h3>⚠️ 약어 구역 오류</h3><pre>{traceback.format_exc()}</pre><br><a href='/lobby'>로비로</a>"
 
@@ -718,7 +719,6 @@ def play_game():
         content = game['content']
         parts = []
         targets = []
-        
         if game['mode'] == 'register_mnemonic':
             clean_text = re.sub(r'\{([^}]+)\}', r'\1', content)
             parts = [
@@ -726,7 +726,6 @@ def play_game():
                 {'type':'box_content', 'val': clean_text}
             ]
             targets = []
-
         elif game['mode'] == 'abbrev':
             clean = re.sub(r'\{([^}]+)\}', r'\1', content)
             mnemonic_target = game.get('mnemonic', '약어없음')
@@ -735,7 +734,6 @@ def play_game():
                 {'type':'input_abbrev', 'id':0, 'mnemonic_ans': mnemonic_target}
             ]
             targets = [clean.strip()] 
-            
         else:
             last = 0; idx = 0
             for m in re.finditer(r'\{([^}]+)\}', content):
