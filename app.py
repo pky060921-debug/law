@@ -466,8 +466,8 @@ class GoogleSheetManager:
 
             unescaped = html.unescape(raw_text)
             
-            # 해당 텍스트가 등장하면 그 이후의 모든 문자열을 잘라내어 무시합니다.
-            unescaped = re.split(r'「?\s*국민건강보험\s*요양급여의\s*기준\s*」?', unescaped)[0]
+            # [수정됨] 본문(4장) 중간에 등장하는 단어 때문에 전체가 날아가는 것을 방지하기 위해 임시로 비활성화합니다.
+            # unescaped = re.split(r'「?\s*국민건강보험\s*요양급여의\s*기준\s*」?', unescaped)[0]
             
             pre_clean = re.sub(r'<(br|p|div|li)[^>]*>', '\n', unescaped, flags=re.IGNORECASE)
             pre_clean = re.sub(r'</(p|div|li|td|tr)>', '\n', pre_clean, flags=re.IGNORECASE)
@@ -578,7 +578,7 @@ class GoogleSheetManager:
             return False, "데이터 없음"
         except Exception as e:
             return False, str(e)
-
+            
     def delete_all_quests_force(self):
         if not self.ensure_connection():
             return False
