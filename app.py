@@ -47,7 +47,6 @@ def natural_sort_key(text):
     return [int(c) if c.isdigit() else c for c in re.split(r'(\d+)', text)]
 
 def extract_candidates(text):
-    """텍스트에서 빈칸 후보 단어 추출 (조사 제외)"""
     clean_text = re.sub(r'[0-9]+\.|[가-힣]\.|[①-⑮]', ' ', text)
     words = re.findall(r'[가-힣]{2,}', clean_text)
     candidates = []
@@ -67,7 +66,6 @@ def extract_candidates(text):
     return list(set(candidates))
 
 def get_similar_distractors(target, count=4):
-    """단어 풀에서 비슷한 길이의 오답 생성"""
     global GLOBAL_WORD_POOL
     if not GLOBAL_WORD_POOL:
         return ["권한", "책임", "의무", "위반"]
@@ -82,7 +80,6 @@ def get_similar_distractors(target, count=4):
     return distractors
 
 def auto_generate_blanks(text, limit=999):
-    """텍스트에 자동으로 중괄호 빈칸 생성"""
     if '{' in text and '}' in text:
         return text
     
@@ -104,7 +101,6 @@ def auto_generate_blanks(text, limit=999):
     return new_text
 
 def split_content_smartly(text):
-    """긴 조문을 적절한 크기의 스테이지로 분할"""
     text = text.strip()
     MAX_LEN = 300 
     if len(text) < MAX_LEN:
@@ -146,7 +142,6 @@ class GoogleSheetManager:
         self.collections_ws = None
         self.abbrev_ws = None
         self.quest_log_ws = None
-        self.user_quests_ws = None
         self.user_cache = {}
         self.quest_cache = {'data': [], 'time': 0}
         self.CACHE_DURATION = 300
@@ -466,9 +461,9 @@ class GoogleSheetManager:
                         if not cols:
                             continue
                         
-                        # [핵심 교정 1: is_act_cell 판단 시 띄어쓰기 완벽 대응]
+                        # [핵심 교정 1: '조' 위치를 중간으로 이동하여 띄어쓰기 완벽 대응]
                         c0_raw = re.sub(r'<[^>]+>', '', cols[0]).strip()
-                        is_act_cell = bool(re.match(r'^\s*제\s*\d+(?:\s*의\s*\d+)?\s*조', c0_raw))
+                        is_act_cell = bool(re.match(r'^\s*제\s*\d+\s*조(?:\s*의\s*\d+)?', c0_raw))
                         
                         mapped_cols = ["", "", ""]
                         if len(cols) >= 3:
@@ -484,9 +479,9 @@ class GoogleSheetManager:
                             else:
                                 mapped_cols[1] = cols[0]
 
-                        # [핵심 교정 2: current_law_num 추출 시 띄어쓰기 완벽 대응]
+                        # [핵심 교정 2: current_law_num 추출 시 '조' 위치 정상화]
                         if mapped_cols[0].strip():
-                            law_match = re.search(r'제\s*(\d+)(?:\s*의\s*(\d+))?\s*조', re.sub(r'<[^>]+>', '', mapped_cols[0]))
+                            law_match = re.search(r'제\s*(\d+)\s*조(?:\s*의\s*(\d+))?', re.sub(r'<[^>]+>', '', mapped_cols[0]))
                             if law_match:
                                 main_num, ext_part = law_match.group(1), law_match.group(2)
                                 current_law_num = f"{int(main_num):03d}조"
@@ -494,9 +489,12 @@ class GoogleSheetManager:
                                     current_law_num += f"의{ext_part}"
                         
                         if current_law_num == "000조":
-                            fallback = re.search(r'제\s*(\d+)\s*조', row_text)
+                            fallback = re.search(r'제\s*(\d+)\s*조(?:\s*의\s*(\d+))?', row_text)
                             if fallback:
-                                current_law_num = f"{int(fallback.group(1)):03d}조"
+                                main_num, ext_part = fallback.group(1), fallback.group(2)
+                                current_law_num = f"{int(main_num):03d}조"
+                                if ext_part:
+                                    current_law_num += f"의{ext_part}"
 
                         for col_idx in range(3):
                             html_content = mapped_cols[col_idx]
@@ -505,7 +503,7 @@ class GoogleSheetManager:
                             
                             clean_content = re.sub(r'<[^>]+>', '', html_content)
                             
-                            # [요구사항 반영: 국민건강보험법 텍스트 완전 삭제]
+                            # 불필요한 법령 이름 텍스트 완전 삭제
                             clean_content = re.sub(r'「?국민건강보험법\s*시행(?:령|규칙)」?', '', clean_content)
                             
                             clean_content = re.sub(r'([^\n])\s*(\d+\.)', r'\1\n\2', clean_content)
@@ -517,8 +515,8 @@ class GoogleSheetManager:
                             if len(clean_content) < 2: continue
                             if clean_content in ["시행규칙", "법률", "내용없음", ".", "-"]: continue
                             
-                            # [핵심 교정 3: 행성 제목에서 조 번호 추출 시 띄어쓰기 대응]
-                            article_match = re.search(r'제\s*(\d+)(?:\s*의\s*(\d+))?\s*조', clean_content)
+                            # [핵심 교정 3: 제목에서 조 번호 추출 시 '조' 위치 정상화]
+                            article_match = re.search(r'제\s*(\d+)\s*조(?:\s*의\s*(\d+))?', clean_content)
                             if article_match:
                                 main_n, ext_n = article_match.group(1), article_match.group(2)
                                 article_num_str = f"제{main_n}조" + (f"의{ext_n}" if ext_n else "")
@@ -552,20 +550,6 @@ class GoogleSheetManager:
         except Exception as e:
             return False, str(e)
 
-    def delete_my_quest(self, user_id, quest_name):
-        if not self.ensure_connection():
-            return False
-        try:
-            records = self.get_safe_records(self.quests_ws)
-            for i, r in enumerate(records):
-                if r.get('quest_name') == quest_name and str(r.get('creator')) == str(user_id):
-                    self.quests_ws.delete_rows(i + 2)
-                    self.quest_cache = {'data': [], 'time': 0}
-                    return True
-            return False
-        except:
-            return False
-
     def delete_all_quests_force(self):
         if not self.ensure_connection():
             return False
@@ -577,12 +561,6 @@ class GoogleSheetManager:
             return True
         except:
             return False
-
-    def get_my_created_quests(self, user_id):
-        if not self.ensure_connection():
-            return []
-        records = self.get_quest_list()
-        return [r for r in records if str(r.get('creator')) == str(user_id)]
 
     def find_next_quest(self, current_quest_name):
         quests = self.get_quest_list()
