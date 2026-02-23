@@ -3,7 +3,6 @@
 {% block content %}
 <link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700&display=swap" rel="stylesheet">
 <style>
-    /* ... (기존 스타일 유지) ... */
     :root { --paper-bg: #fff; --text-ink: #000; --font-serif: 'Nanum Myeongjo', serif; }
     body { background-color: #e0e0e0; font-family: var(--font-serif); color: var(--text-ink); overflow: hidden; margin: 0; }
     
@@ -18,57 +17,60 @@
     .q-box-label { width: 100%; text-align: left; font-weight: bold; margin-bottom: 10px; font-size: 1rem; }
     .q-box { border: 2px solid #000; padding: 20px; width: 100%; height: 100%; font-size: 1.1rem; line-height: 2.0; background: #fff; white-space: pre-wrap; word-break: keep-all; text-align: left; box-sizing: border-box; }
     
+    /* 법률 용어 길이에 대응하는 유연한 옵션 그리드 */
     .options-area { background: #f9f9f9; padding: 10px; border-top: 1px solid #ccc; flex-shrink: 0; height: auto; min-height: 80px; padding-bottom: 100px; }
-    .options-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
-    .option-btn { background: #fff; border: 1px solid #aaa; padding: 10px 5px; text-align: center; font-family: var(--font-serif); font-size: 0.9rem; cursor: pointer; transition: 0.2s; border-radius: 4px; width: 100%; word-break: break-word; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 50px; }
-    .option-btn:hover { background: #eee; border-color: #000; }
+    .options-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    @media (min-width: 600px) { .options-grid { grid-template-columns: repeat(4, 1fr); } }
     
-    .q-blank { display: inline-block; min-width: 50px; height: 1.2em; border-bottom: 2px solid #555; vertical-align: baseline; margin: 0 2px; background: transparent; color: transparent; text-align: center; font-weight: bold; padding: 0 3px; transition: all 0.2s; }
-    .q-blank.active { border-bottom: 3px solid #007bff; background: rgba(0,123,255,0.05); }
-    .q-blank.filled { border-bottom: 2px solid #000; color: #000; width: auto; }
+    .option-btn { background: #fff; border: 1px solid #aaa; padding: 12px 8px; text-align: center; font-family: var(--font-serif); font-size: 0.95rem; font-weight: bold; cursor: pointer; transition: 0.2s; border-radius: 4px; width: 100%; word-break: keep-all; min-height: 55px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .option-btn:hover { background: #eef2f5; border-color: #0056b3; transform: translateY(-1px); }
+    
+    .q-blank { display: inline-block; min-width: 60px; height: 1.2em; border-bottom: 2px dashed #777; vertical-align: baseline; margin: 0 4px; background: #fdfdfd; color: transparent; text-align: center; font-weight: bold; padding: 0 5px; transition: all 0.2s; border-radius: 2px; }
+    .q-blank.active { border-bottom: 3px solid #e74c3c; background: rgba(231,76,60,0.1); color: transparent; }
+    .q-blank.filled { border-bottom: 2px solid #27ae60; color: #27ae60; background: transparent; width: auto; }
 
-    /* [수정] 맵 버튼 z-index 및 위치 조정 */
-    .map-return-btn { position: fixed; bottom: 20px; right: 20px; z-index: 5000; background: #333; color: #fff; border: 2px solid #fff; padding: 8px 12px; border-radius: 30px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 5px; font-size: 0.8rem; }
+    .map-return-btn { position: fixed; bottom: 20px; right: 20px; z-index: 5000; background: #2c3e50; color: #fff; border: 2px solid #fff; padding: 10px 16px; border-radius: 30px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 5px; font-size: 0.9rem; transition: background 0.2s; }
+    .map-return-btn:hover { background: #34495e; }
     
     .result-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 6000; display: flex; justify-content: center; align-items: center; }
-    .result-box { background: #fff; border: 2px solid #000; padding: 40px; text-align: center; width: 90%; max-width: 400px; font-family: var(--font-serif); }
-    .pixel-btn { background: #000; color: #fff; border: none; padding: 10px 20px; font-size: 1rem; cursor: pointer; text-decoration: none; display: inline-block; margin-top: 10px; width: 100%; box-sizing: border-box; }
-    .btn-secondary { background: #555; }
-    
-    @media (max-width: 480px) { .options-grid { grid-template-columns: repeat(2, 1fr); } }
+    .result-box { background: #fff; border: 3px solid #2c3e50; padding: 40px; text-align: center; width: 90%; max-width: 400px; font-family: var(--font-serif); border-radius: 8px; }
+    .pixel-btn { background: #2980b9; color: #fff; border: none; padding: 12px 20px; font-size: 1rem; font-weight: bold; cursor: pointer; border-radius: 4px; display: inline-block; margin-top: 10px; width: 100%; box-sizing: border-box; transition: 0.2s; }
+    .pixel-btn:hover { background: #3498db; }
+    .btn-secondary { background: #7f8c8d; }
+    .btn-secondary:hover { background: #95a5a6; }
 </style>
 
 <div class="play-screen">
     <div class="play-header">
-        <div class="exam-title"><span id="stageBadge" style="border:1px solid #000; padding:1px 4px; font-size:0.7rem; margin-right:5px; vertical-align:middle;">법률</span><span id="stageTitle">제1조</span></div>
+        <div class="exam-title"><span id="stageBadge" style="border:1px solid #000; padding:2px 6px; font-size:0.75rem; border-radius:3px; margin-right:6px; background:#f1f2f6;">법률</span><span id="stageTitle">제1조</span></div>
         <div class="item-dock">
-            <button class="item-btn" onclick="useFreeze()">❄️ 정지 ({{ user_items.item_freeze }})</button>
-            <button class="item-btn" onclick="useScanner()">📡 힌트 ({{ user_items.item_scanner }})</button>
+            <button class="item-btn" onclick="useFreeze()">❄️ 시간정지 ({{ user_items.item_freeze }})</button>
+            <button class="item-btn" onclick="useScanner()">📡 스캐너 ({{ user_items.item_scanner }})</button>
         </div>
         <div class="timer-display" id="timerDisplay">0.0</div>
     </div>
     <div class="question-area">
-        <div class="q-box-label" id="qNumLabel">문항 1. 빈칸을 채우시오.</div>
+        <div class="q-box-label" id="qNumLabel">문항 1. 핵심 키워드를 채우시오.</div>
         <div class="q-box" id="qText"></div>
     </div>
     <div class="options-area"><div class="options-grid" id="optionsGrid"></div></div>
     
-    <button type="button" class="map-return-btn" onclick="location.href='/lobby'">🗺️ 맵으로</button>
+    <button type="button" class="map-return-btn" onclick="location.href='/lobby'">🗺️ 차원 맵으로 복귀</button>
 </div>
 
 <form id="winForm" method="POST" style="display:none;"><input type="hidden" name="duration" id="gDuration"></form>
 
 <div id="failModal" class="result-overlay" style="display:none;">
     <div class="result-box">
-        <h2 style="color:#e74c3c;">정 복 실 패</h2>
-        <p>오답입니다.</p>
-        <div style="display:flex; flex-direction:column; gap:10px;">
+        <h2 style="color:#e74c3c; margin-top:0;">정 복 실 패</h2>
+        <p style="font-size:1.1rem; color:#555;">논리 연결에 실패했습니다.</p>
+        <div style="display:flex; flex-direction:column; gap:10px; margin-top:20px;">
             <form action="/game_start" method="POST">
                 <input type="hidden" name="quest_name" value="{{ title }}">
                 <input type="hidden" name="action" value="{{ mode }}">
-                <button type="submit" class="pixel-btn">⚔️ 다시 정복</button>
+                <button type="submit" class="pixel-btn">⚔️ 재도전</button>
             </form>
-            <button type="button" class="pixel-btn btn-secondary" onclick="location.href='/lobby'">🗺️ 맵으로</button>
+            <button type="button" class="pixel-btn btn-secondary" onclick="location.href='/lobby'">🗺️ 후퇴하기</button>
         </div>
     </div>
 </div>
@@ -76,17 +78,17 @@
 {% if show_result %}
 <div class="result-overlay">
     <div class="result-box">
-        <h1 style="color:#2ecc71;">정 복 완 료</h1>
-        <p>등급: 1등급 (Lv.{{ reward_lv }})</p>
-        <div style="display:flex; flex-direction:column; gap:10px;">
+        <h2 style="color:#27ae60; margin-top:0;">정 복 완 료</h2>
+        <p style="font-size:1.1rem; color:#555;">보상 획득: Lv.{{ reward_lv }} GOAL 코인</p>
+        <div style="display:flex; flex-direction:column; gap:10px; margin-top:20px;">
             {% if next_quest %}
             <form action="/game_start" method="POST">
                 <input type="hidden" name="quest_name" value="{{ next_quest }}">
                 <input type="hidden" name="action" value="develop">
-                <button type="submit" class="pixel-btn">🚀 다음 행성</button>
+                <button type="submit" class="pixel-btn">🚀 다음 구역으로 진격</button>
             </form>
             {% endif %}
-            <button type="button" onclick="location.href='/lobby'" class="pixel-btn btn-secondary">🏁 여기까지</button>
+            <button type="button" onclick="location.href='/lobby'" class="pixel-btn btn-secondary">🏁 복귀하기</button>
         </div>
     </div>
 </div>
@@ -104,7 +106,7 @@
     window.onload = function() {
         if (!{{ 'true' if show_result else 'false' }}) {
             if (stages.length > 0) loadStage(0);
-            else { alert("문제 생성 실패"); location.href='/lobby'; }
+            else { alert("데이터 오류: 차원 정보를 읽을 수 없습니다."); location.href='/lobby'; }
         }
     };
 
@@ -115,7 +117,7 @@
         
         document.getElementById('stageTitle').innerText = data.stage_name;
         document.getElementById('stageBadge').innerText = data.q_type;
-        document.getElementById('qNumLabel').innerText = `문항 ${idx + 1}. 빈칸을 채우시오.`;
+        document.getElementById('qNumLabel').innerText = `문항 ${idx + 1}. 핵심 키워드를 연결하시오.`;
         document.getElementById('qText').innerHTML = data.html;
         
         const blankCount = data.targets.length;
@@ -138,9 +140,7 @@
             }
         } else {
             if (currentStageIdx + 1 < stages.length) {
-                setTimeout(() => {
-                    loadStage(currentStageIdx + 1);
-                }, 300);
+                setTimeout(() => { loadStage(currentStageIdx + 1); }, 400);
             } else {
                 clearInterval(timerInterval);
                 document.getElementById('gDuration').value = ((Date.now() - startTime)/1000).toFixed(1);
@@ -157,7 +157,7 @@
         const opts = data.options_map[String(blankIdx)];
         
         if (opts) {
-            opts.forEach((word, i) => {
+            opts.forEach((word) => {
                 const btn = document.createElement('button');
                 btn.className = 'option-btn';
                 btn.innerText = word;
@@ -200,14 +200,15 @@
         }
     }
     
-    function useFreeze() { alert("시험 시간에는 시간을 멈출 수 없습니다."); }
+    function useFreeze() { alert("현 차원에서는 시간 정지를 사용할 수 없습니다."); }
     function useScanner() { 
-        fetch('/use_item_ingame', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({item: 'scanner'}) }).then(r=>r.json()).then(d=>{
+        fetch('/use_item_ingame', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({item: 'scanner'}) })
+        .then(r=>r.json()).then(d=>{
             if(d.success) { 
                 const ans = stages[currentStageIdx].targets[currentBlankIdx]; 
                 checkAnswer(ans); 
             } 
-            else alert("아이템 부족"); 
+            else alert("스캐너 아이템이 부족합니다."); 
         });
     }
 </script>
