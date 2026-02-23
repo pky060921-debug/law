@@ -148,6 +148,7 @@ def split_content_smartly(text):
     return chunks
 
 class GoogleSheetManager:
+
     def __init__(self):
         self.client = None
         self.sheet = None
@@ -156,8 +157,13 @@ class GoogleSheetManager:
         self.collections_ws = None
         self.abbrev_ws = None
         self.quest_log_ws = None
+        self.user_quests_ws = None
         self.user_cache = {}
         self.quest_cache = {'data': [], 'time': 0}
+        
+        # [핵심 1] 유저 클리어 기록을 저장할 캐시 추가
+        self.collection_cache = {'data': [], 'time': 0} 
+        
         self.CACHE_DURATION = 300
         
         self.USER_HEADERS = ["user_id", "password", "level", "xp", "title", "last_idx", "points", "nickname", "item_freeze", "item_scanner", "item_shield"]
@@ -304,7 +310,14 @@ class GoogleSheetManager:
     def get_my_progress(self, user_id): 
         if not self.ensure_connection():
             return []
-        records = self.get_safe_records(self.collections_ws)
+            
+        # [핵심 2] 5분 이내의 기록이 맥미니에 캐시되어 있다면 구글에 묻지 않고 바로 반환 (속도 100배 향상)
+        if self.collection_cache['data'] and (time.time() - self.collection_cache['time'] < self.CACHE_DURATION):
+            records = self.collection_cache['data']
+        else:
+            records = self.get_safe_records(self.collections_ws)
+            self.collection_cache = {'data': records, 'time': time.time()}
+            
         return [r for r in records if str(r.get('user_id')) == str(user_id)]
 
     def add_xp(self, user_id, amount, points_amount=0):
@@ -389,6 +402,9 @@ class GoogleSheetManager:
         
         today = str(datetime.date.today())
         
+        # [핵심 3] 유저가 행성을 클리어해서 구글 시트가 업데이트될 예정이므로, 기존 캐시를 강제로 비워 다음 로비 진입 시 새로고침하도록 함
+        self.collection_cache['time'] = 0
+        
         if mode == 'terraform': 
             if found_idx == -1:
                 self.collections_ws.append_row([user_id, "CLEARED", "NORMAL", today, quest_name, 1, "ACT", duration])
@@ -404,7 +420,7 @@ class GoogleSheetManager:
                 return self.add_xp(user_id, 20 + curr_lv*5, 10 + curr_lv*2)
         
         return 0, 0
-
+        
     def get_mnemonic(self, user_id, quest_name):
         if not self.ensure_connection():
             return ""
