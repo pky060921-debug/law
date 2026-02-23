@@ -43,31 +43,21 @@ ACTIVE_GAMES = {}
 GLOBAL_WORD_POOL = set()
 
 def natural_sort_key(text):
-    """숫자와 문자가 섞인 문자열을 자연스럽게 정렬 (제3조, 제3조의2 순서 보장)"""
     return [int(c) if c.isdigit() else c for c in re.split(r'(\d+)', text)]
 
 def extract_candidates(text):
-    """
-    [BLANK DIMENSION 알고리즘 V2]
-    1. 조문 제목 (괄호 안)
-    2. 숫자 및 기간 (일, 개월, 년, 분의 등)
-    3. 법적 주체 및 대상 (명사+조사 조합 기반 추출)
-    """
     candidates = []
     
-    # 1. 조문 제목 (괄호 안 내용 추출)
     titles = re.findall(r'\(([^)]+)\)', text)
     for t in titles:
         if len(t) >= 2 and not re.match(r'^\d+$', t):
             candidates.append(t.strip())
             
-    # 2. 숫자 및 기간 (예: 20일, 3개월, 100분의 50)
     numbers = re.findall(r'\d+(?:일|개월|년|만원|명|분의\s*\d+)', text)
     candidates.extend(numbers)
     
-    # 3. 주체, 대상, 목적 추출 (조사 분리)
     clean_text = re.sub(r'[0-9]+\.|[가-힣]\.|[①-⑮]', ' ', text)
-    clean_text = re.sub(r'\([^)]+\)', ' ', clean_text) # 괄호 내용 중복 방지
+    clean_text = re.sub(r'\([^)]+\)', ' ', clean_text)
     words = re.findall(r'[가-힣0-9]{2,}', clean_text)
     
     josas = ['은', '는', '이', '가', '을', '를', '의', '에', '로', '으로', '에서', '에게', '하여야', '한다', '할 수']
@@ -75,7 +65,6 @@ def extract_candidates(text):
     
     for w in words:
         if w in stop_words: continue
-        original_w = w
         for j in josas:
             if w.endswith(j):
                 w = w[:-len(j)]
@@ -86,12 +75,10 @@ def extract_candidates(text):
     return list(set(candidates))
 
 def get_similar_distractors(target, count=4):
-    """오답지 생성기 (숫자는 숫자끼리 묶도록 개선)"""
     global GLOBAL_WORD_POOL
     if not GLOBAL_WORD_POOL:
         return ["권한", "책임", "의무", "위반"]
     
-    # 정답이 숫자를 포함하면 오답도 숫자 위주로 추출
     if any(char.isdigit() for char in target):
         num_pool = [w for w in GLOBAL_WORD_POOL if any(c.isdigit() for c in w) and w != target]
         if len(num_pool) >= count:
@@ -107,7 +94,6 @@ def get_similar_distractors(target, count=4):
     return distractors
 
 def auto_generate_blanks(text, limit=999):
-    """텍스트에 자동으로 중괄호 빈칸 생성"""
     if '{' in text and '}' in text:
         return text
     
@@ -129,7 +115,6 @@ def auto_generate_blanks(text, limit=999):
     return new_text
 
 def split_content_smartly(text):
-    """긴 조문을 적절한 크기의 스테이지로 분할"""
     text = text.strip()
     MAX_LEN = 300 
     if len(text) < MAX_LEN:
@@ -171,7 +156,6 @@ class GoogleSheetManager:
         self.collections_ws = None
         self.abbrev_ws = None
         self.quest_log_ws = None
-        self.user_quests_ws = None
         self.user_cache = {}
         self.quest_cache = {'data': [], 'time': 0}
         self.CACHE_DURATION = 300
@@ -465,10 +449,6 @@ class GoogleSheetManager:
                 raw_text = raw_data.decode('utf-8', errors='ignore')
 
             unescaped = html.unescape(raw_text)
-            
-            # [수정됨] 본문(4장) 중간에 등장하는 단어 때문에 전체가 날아가는 것을 방지하기 위해 임시로 비활성화합니다.
-            # unescaped = re.split(r'「?\s*국민건강보험\s*요양급여의\s*기준\s*」?', unescaped)[0]
-            
             pre_clean = re.sub(r'<(br|p|div|li)[^>]*>', '\n', unescaped, flags=re.IGNORECASE)
             pre_clean = re.sub(r'</(p|div|li|td|tr)>', '\n', pre_clean, flags=re.IGNORECASE)
             rows = re.split(r'<tr[^>]*>', pre_clean, flags=re.IGNORECASE)
@@ -535,6 +515,10 @@ class GoogleSheetManager:
                             
                             clean_content = re.sub(r'<[^>]+>', '', html_content)
                             
+                            # [핵심 로직] 이 칸(cell) 안에 특정 키워드가 들어있으면 패스하여 퀘스트로 만들지 않음
+                            if re.search(r'국민건강보험\s*요양급여의\s*기준', clean_content):
+                                continue
+                            
                             clean_content = re.sub(r'「?국민건강보험법\s*시행(?:령|규칙)」?', '', clean_content)
                             clean_content = re.sub(r'([^\n])\s*(\d+\.)', r'\1\n\2', clean_content)
                             clean_content = re.sub(r'[①-⑮\[<].*?[\d\.]+.*?[\]>]', '', clean_content)
@@ -578,7 +562,7 @@ class GoogleSheetManager:
             return False, "데이터 없음"
         except Exception as e:
             return False, str(e)
-            
+
     def delete_all_quests_force(self):
         if not self.ensure_connection():
             return False
