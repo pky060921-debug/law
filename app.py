@@ -47,6 +47,7 @@ def natural_sort_key(text):
     return [int(c) if c.isdigit() else c for c in re.split(r'(\d+)', text)]
 
 def extract_candidates(text):
+    """텍스트에서 빈칸 후보 단어 추출 (조사 제외)"""
     clean_text = re.sub(r'[0-9]+\.|[가-힣]\.|[①-⑮]', ' ', text)
     words = re.findall(r'[가-힣]{2,}', clean_text)
     candidates = []
@@ -66,6 +67,7 @@ def extract_candidates(text):
     return list(set(candidates))
 
 def get_similar_distractors(target, count=4):
+    """단어 풀에서 비슷한 길이의 오답 생성"""
     global GLOBAL_WORD_POOL
     if not GLOBAL_WORD_POOL:
         return ["권한", "책임", "의무", "위반"]
@@ -80,6 +82,7 @@ def get_similar_distractors(target, count=4):
     return distractors
 
 def auto_generate_blanks(text, limit=999):
+    """텍스트에 자동으로 중괄호 빈칸 생성"""
     if '{' in text and '}' in text:
         return text
     
@@ -101,6 +104,7 @@ def auto_generate_blanks(text, limit=999):
     return new_text
 
 def split_content_smartly(text):
+    """긴 조문을 적절한 크기의 스테이지로 분할"""
     text = text.strip()
     MAX_LEN = 300 
     if len(text) < MAX_LEN:
@@ -142,6 +146,7 @@ class GoogleSheetManager:
         self.collections_ws = None
         self.abbrev_ws = None
         self.quest_log_ws = None
+        self.user_quests_ws = None
         self.user_cache = {}
         self.quest_cache = {'data': [], 'time': 0}
         self.CACHE_DURATION = 300
@@ -435,6 +440,10 @@ class GoogleSheetManager:
                 raw_text = raw_data.decode('utf-8', errors='ignore')
 
             unescaped = html.unescape(raw_text)
+            
+            # [핵심 추가 로직] 해당 텍스트가 등장하면 그 이후의 모든 문자열을 잘라내어 무시합니다.
+            unescaped = re.split(r'「?\s*국민건강보험\s*요양급여의\s*기준\s*」?', unescaped)[0]
+            
             pre_clean = re.sub(r'<(br|p|div|li)[^>]*>', '\n', unescaped, flags=re.IGNORECASE)
             pre_clean = re.sub(r'</(p|div|li|td|tr)>', '\n', pre_clean, flags=re.IGNORECASE)
             rows = re.split(r'<tr[^>]*>', pre_clean, flags=re.IGNORECASE)
@@ -461,7 +470,6 @@ class GoogleSheetManager:
                         if not cols:
                             continue
                         
-                        # [핵심 교정 1: '조' 위치를 중간으로 이동하여 띄어쓰기 완벽 대응]
                         c0_raw = re.sub(r'<[^>]+>', '', cols[0]).strip()
                         is_act_cell = bool(re.match(r'^\s*제\s*\d+\s*조(?:\s*의\s*\d+)?', c0_raw))
                         
@@ -479,7 +487,6 @@ class GoogleSheetManager:
                             else:
                                 mapped_cols[1] = cols[0]
 
-                        # [핵심 교정 2: current_law_num 추출 시 '조' 위치 정상화]
                         if mapped_cols[0].strip():
                             law_match = re.search(r'제\s*(\d+)\s*조(?:\s*의\s*(\d+))?', re.sub(r'<[^>]+>', '', mapped_cols[0]))
                             if law_match:
@@ -503,9 +510,7 @@ class GoogleSheetManager:
                             
                             clean_content = re.sub(r'<[^>]+>', '', html_content)
                             
-                            # 불필요한 법령 이름 텍스트 완전 삭제
                             clean_content = re.sub(r'「?국민건강보험법\s*시행(?:령|규칙)」?', '', clean_content)
-                            
                             clean_content = re.sub(r'([^\n])\s*(\d+\.)', r'\1\n\2', clean_content)
                             clean_content = re.sub(r'[①-⑮\[<].*?[\d\.]+.*?[\]>]', '', clean_content)
                             clean_content = clean_content.replace("시행령", "").replace("시행규칙", "")
@@ -515,7 +520,6 @@ class GoogleSheetManager:
                             if len(clean_content) < 2: continue
                             if clean_content in ["시행규칙", "법률", "내용없음", ".", "-"]: continue
                             
-                            # [핵심 교정 3: 제목에서 조 번호 추출 시 '조' 위치 정상화]
                             article_match = re.search(r'제\s*(\d+)\s*조(?:\s*의\s*(\d+))?', clean_content)
                             if article_match:
                                 main_n, ext_n = article_match.group(1), article_match.group(2)
