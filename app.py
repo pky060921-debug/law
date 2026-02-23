@@ -466,9 +466,9 @@ class GoogleSheetManager:
                         if not cols:
                             continue
                         
-                        # [핵심 교정: 칸 내용이 제X조로 시작하면 무조건 법으로 분류]
+                        # [핵심 교정: 칸 내용이 제X조로 시작하면 법으로 분류, 띄어쓰기 패턴 완벽 대응]
                         c0_raw = re.sub(r'<[^>]+>', '', cols[0]).strip()
-                        is_act_cell = bool(re.match(r'^\s*제\s*\d+(?:의\d+)?\s*조', c0_raw))
+                        is_act_cell = bool(re.match(r'^\s*제\s*\d+(?:\s*의\s*\d+)?\s*조', c0_raw))
                         
                         mapped_cols = ["", "", ""]
                         if len(cols) >= 3:
@@ -484,9 +484,9 @@ class GoogleSheetManager:
                             else:
                                 mapped_cols[1] = cols[0]
 
-                        # [핵심 교정: 제3조의2와 같은 가지번호 완벽 보존]
+                        # [핵심 교정: 제3조 의 2와 같은 가지번호 띄어쓰기 완벽 보존]
                         if mapped_cols[0].strip():
-                            law_match = re.search(r'(제\s*(\d+)(?:의\s*(\d+))?\s*조)', re.sub(r'<[^>]+>', '', mapped_cols[0]))
+                            law_match = re.search(r'(제\s*(\d+)(?:\s*의\s*(\d+))?\s*조)', re.sub(r'<[^>]+>', '', mapped_cols[0]))
                             if law_match:
                                 main_num, ext_part = law_match.group(2), law_match.group(3)
                                 current_law_num = f"{int(main_num):03d}조"
@@ -504,6 +504,10 @@ class GoogleSheetManager:
                                 continue
                             
                             clean_content = re.sub(r'<[^>]+>', '', html_content)
+                            
+                            # [요구사항 반영] 불필요한 법령 이름 텍스트 완전 삭제
+                            clean_content = re.sub(r'「?국민건강보험법\s*시행(?:령|규칙)」?', '', clean_content)
+                            
                             clean_content = re.sub(r'([^\n])\s*(\d+\.)', r'\1\n\2', clean_content)
                             clean_content = re.sub(r'[①-⑮\[<].*?[\d\.]+.*?[\]>]', '', clean_content)
                             clean_content = clean_content.replace("시행령", "").replace("시행규칙", "")
@@ -513,8 +517,13 @@ class GoogleSheetManager:
                             if len(clean_content) < 2: continue
                             if clean_content in ["시행규칙", "법률", "내용없음", ".", "-"]: continue
                             
-                            article_match = re.search(r'(제\s*\d+(?:의\d+)?\s*조)', clean_content)
-                            article_num_str = article_match.group(1).replace(" ", "") if article_match else ""
+                            # [수정됨] 행성 제목에서도 띄어쓰기된 가지번호 인식
+                            article_match = re.search(r'(제\s*(\d+)(?:\s*의\s*(\d+))?\s*조)', clean_content)
+                            if article_match:
+                                main_n, sub_n = article_match.group(2), article_match.group(3)
+                                article_num_str = f"제{main_n}조" + (f"의{sub_n}" if sub_n else "")
+                            else:
+                                article_num_str = current_law_num.lstrip('0')
                             
                             title_text = ""
                             title_match = re.search(r'\((.*?)\)', clean_content)
