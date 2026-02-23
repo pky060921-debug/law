@@ -1,0 +1,34 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="menu-container" style="max-width:500px; margin:100px auto; text-align:center; color:#fff;">
+    <h2 style="color:var(--accent-gold); border-bottom: 2px solid #333; padding-bottom: 10px;">내 정보</h2>
+    
+    <div style="margin:30px 0;">
+        <img src="{{ url_for('static', filename='images/avatar_' ~ ((user.level % 5) + 1) ~ '.png') }}" 
+             style="width:100px; height:100px; border-radius:50%; border:3px solid var(--accent-cyan); box-shadow:0 0 20px rgba(0,243,255,0.3);">
+        <h3 style="margin:10px 0;">{{ user.nickname }}</h3>
+        <p style="color:#aaa;">레벨 {{ user.level }} | 경험치 {{ user.xp }}</p>
+    </div>
+
+    <div style="background:rgba(255,255,255,0.05); padding:20px; border-radius:8px; margin-bottom:20px;">
+        <h4 style="margin-top:0;">닉네임 변경</h4>
+        <form action="/update_profile" method="POST" style="display:flex; gap:5px;">
+            <input type="text" name="nickname" class="pixel-input" placeholder="새 닉네임" value="{{ user.nickname }}" style="flex:1;">
+            <button type="submit" class="pixel-btn btn-blue" style="padding:10px;">변경</button>
+        </form>
+    </div>
+
+    <div style="background:rgba(255,255,255,0.05); padding:20px; border-radius:8px;">
+        <h4 style="margin-top:0;">학습 기록 초기화</h4>
+        <p style="color:#aaa; font-size:0.8rem; margin-bottom:15px;">레벨과 경험치는 유지되지만, 학습 완료 기록(카드)이 모두 사라집니다.</p>
+        <form action="/reset_learning" method="POST" onsubmit="return confirm('정말 학습 기록을 초기화하시겠습니까?');">
+            <button type="submit" class="pixel-btn">🔄 학습 기록만 초기화</button>
+        </form>
+    </div>
+
+    <div style="margin-top:30px;">
+        <a href="/lobby" class="pixel-btn">돌아가기</a>
+    </div>
+</div>
+{% endblock %}

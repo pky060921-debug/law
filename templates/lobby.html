@@ -1,0 +1,248 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<style>
+    /* 기본 배경 */
+    body, html { overflow-y: auto; background-color: #0b0d17; margin: 0; min-height: 100%; }
+    body { background-image: url("{{ url_for('static', filename='images/base.png') }}"); background-attachment: fixed; }
+    .universe-viewport { position: relative; width: 100%; min-height: 100vh; }
+    
+    /* 상단 메뉴바 */
+    .icon-menu-bar { position: fixed; top: 15px; right: 20px; z-index: 2000; display: flex; gap: 15px; align-items: center; background: rgba(13, 17, 23, 0.8); padding: 8px 15px; border-radius: 30px; backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.1); }
+    .icon-menu-btn { background: transparent; border: none; font-size: 1.2rem; cursor: pointer; color: #fff; transition: transform 0.2s; text-decoration: none; display: flex; align-items: center; }
+    .icon-menu-btn:hover { transform: scale(1.2); }
+    
+    /* 플로팅 정보 */
+    .floating-title { position: fixed; top: 20px; left: 20px; z-index: 2000; font-family: var(--font-main); color: var(--accent-cyan); font-size: 1.4rem; font-weight: bold; text-decoration: none; text-shadow: 0 0 5px rgba(0, 243, 255, 0.5); }
+    .floating-info-panel { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 2000; background: rgba(13, 17, 23, 0.8); padding: 8px 25px; border-radius: 30px; display: flex; gap: 20px; align-items: center; justify-content: center; backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.1); white-space: nowrap; }
+    .info-item { display: flex; align-items: center; gap: 8px; color: #fff; font-size: 0.9rem; }
+    .info-val { font-weight: bold; }
+
+    /* 뒤로가기 버튼 */
+    .back-btn-float { 
+        position: fixed; top: 80px; left: 20px; 
+        background: rgba(255,255,255,0.1); color: #fff; 
+        border: 1px solid #777; padding: 8px 15px; border-radius: 20px; 
+        font-size: 0.9rem; cursor: pointer; z-index: 1500; backdrop-filter: blur(3px); 
+    }
+
+    /* 챕터 표시 (항성) */
+    .chapter-indicator {
+        position: fixed; top: 120px; left: 0;
+        width: 150px; height: 150px;
+        background: radial-gradient(circle at top left, #ffeb3b, #ff9800);
+        box-shadow: 0 0 20px rgba(255, 152, 0, 0.6), inset 0 0 20px rgba(255, 235, 59, 0.5);
+        border-radius: 0 0 100% 0; 
+        color: #000; font-weight: bold; font-size: 1.1rem;
+        z-index: 900;
+        display: flex; align-items: center; justify-content: center;
+        text-align: center;
+        padding-right: 20px; padding-bottom: 20px;
+        clip-path: circle(100% at 0 0);
+    }
+
+    /* 그리드 뷰 (은하) */
+    .galaxy-grid-view { padding: 150px 20px 60px 20px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 30px; max-width: 1200px; margin: 0 auto; justify-items: center; }
+    .chapter-item { display: flex; flex-direction: column; align-items: center; cursor: pointer; transition: transform 0.3s; width: 140px; }
+    .chapter-img { width: 100px; height: 100px; border-radius: 50%; object-fit: cover; margin-bottom: 10px; box-shadow: 0 0 20px rgba(0, 243, 255, 0.3); }
+    .chapter-title-text { font-weight: bold; color: #fff; font-size: 1rem; text-align: center; white-space: nowrap; width: 100%; display: block; padding: 0 5px; box-sizing: border-box; }
+
+    /* 시스템 뷰 (리스트) */
+    .system-grid-view { 
+        padding: 120px 40px 100px 40px; 
+        display: flex; flex-direction: column; 
+        gap: 0; 
+        max-width: 1200px; margin: 0 auto; min-height: 100vh; 
+    }
+    .law-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; align-items: stretch; position: relative; padding-bottom: 20px; }
+
+    .law-card { 
+        background: transparent; border: none; padding: 5px; 
+        cursor: pointer; transition: 0.2s; text-align: center; 
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        width: 100%; position: relative; z-index: 2;
+    }
+    .law-card:hover { transform: translateY(-3px); }
+    
+    .planet-img-small { width: 50px; height: 50px; object-fit: contain; margin-bottom: 5px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.1)); }
+    .grayscale { filter: grayscale(100%) brightness(0.6); opacity: 0.6; }
+    
+    .card-info { 
+        display: flex; flex-direction: column; align-items: center; gap: 2px; 
+        background: rgba(13, 17, 23, 0.9); padding: 5px 10px; 
+        border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); min-width: 100px; 
+    }
+    .card-title { color: #fff; font-size: 0.85rem; word-break: keep-all; line-height: 1.3; pointer-events: none; }
+    
+    /* [수정] 연결선 스타일 (회색) */
+    .tree-connector {
+        position: relative; width: 100%; height: 100%;
+        display: flex; justify-content: center;
+    }
+    .tree-line-v {
+        position: absolute; top: -20px; bottom: 0; left: 50%; width: 2px;
+        background: #999; /* 회색 */
+        transform: translateX(-50%); z-index: 1;
+    }
+    .tree-line-h {
+        position: absolute; top: 50%; left: 50%; width: 50%; height: 2px;
+        background: #999; /* 회색 */
+        z-index: 1;
+    }
+    .tree-dot {
+        position: absolute; top: 50%; left: 50%; width: 8px; height: 8px;
+        background: var(--accent-cyan); border-radius: 50%;
+        transform: translate(-50%, -50%); z-index: 2;
+        box-shadow: 0 0 5px var(--accent-cyan);
+    }
+
+    /* 모달 */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+    .modal-box { background: #161b22; border: 2px solid var(--accent-cyan); padding: 30px; width: 90%; max-width: 400px; text-align: center; border-radius: 15px; box-shadow: 0 0 50px rgba(0, 243, 255, 0.3); }
+    .modal-btn-group { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+    .pixel-btn { background: var(--accent-cyan); color: #000; border: none; padding: 15px; font-size: 1.1rem; font-weight: bold; cursor: pointer; border-radius: 8px; transition: 0.2s; }
+    .close-btn { background: #333; color: #fff; margin-top: 10px; }
+
+    @media (max-width: 768px) {
+        .galaxy-grid-view { grid-template-columns: repeat(2, 1fr); padding-top: 150px; gap: 15px; }
+        .system-grid-view { padding: 140px 15px 60px 15px; gap: 0; }
+        .law-row { display: flex; flex-direction: column; align-items: center; gap: 15px; padding-bottom: 30px; position:relative;}
+        .chapter-indicator { width: 120px; height: 120px; font-size: 0.9rem; padding-right: 15px; padding-bottom: 15px; }
+        .tree-line-v, .tree-line-h, .tree-dot { display: none; }
+        .chapter-item { width: 100%; }
+    }
+</style>
+
+<a href="/lobby" class="floating-title">BLANK DIMENSION</a>
+<div class="floating-info-panel">
+    <div class="info-item"><span class="info-label">RANK</span><span class="info-val" style="color:var(--accent-gold);">LV.{{ user.level }}</span></div>
+    <div class="info-item"><span class="info-label">NAME</span><span class="info-val" style="color:#fff;">{{ user.nickname }}</span></div>
+    <div class="info-item"><span class="info-label">RES</span><span class="info-val" id="userPts" style="color:var(--accent-cyan);">{{ user.points }}</span></div>
+</div>
+
+<div class="icon-menu-bar">
+    <a href="/zone/generate" class="icon-menu-btn" title="차원 관리">🌋</a>
+    <a href="/collection" class="icon-menu-btn" title="도감">📜</a>
+    <a href="/mypage" class="icon-menu-btn" title="내 정보">👤</a>
+    <button class="icon-menu-btn" onclick="openShop()" title="상점">🛒</button>
+    <form action="/claim_daily_login" method="POST" style="margin:0;"><button type="submit" class="icon-menu-btn" title="보급품 수령">🎁</button></form>
+    <a href="/logout" class="icon-menu-btn" title="로그아웃" style="color:#ff7b72;">🔌</a>
+</div>
+
+{% if view_mode == 'galaxy' %}
+    <div class="universe-viewport">
+        <div class="galaxy-grid-view">
+            {% for zone in zones %}
+            <div class="chapter-item" onclick="location.href='/lobby?chapter={{ zone.title }}'">
+                {% set nebula_idx = ((zone.id - 1) % 16) + 1 %}
+                <img src="{{ url_for('static', filename='images/nebula' ~ nebula_idx ~ '.png') }}" alt="은하" class="chapter-img">
+                <div class="chapter-title-text">{{ zone.title }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+{% else %}
+    <div class="universe-viewport">
+        <button class="back-btn-float" onclick="location.href='/lobby'">🌌 은하로</button>
+        
+        <div class="chapter-indicator">
+            {{ zones[0].title if zones else 'Unknown' }}
+        </div>
+
+        {% for zone in zones %}
+        <div style="height: 60px;"></div> 
+        
+        <div class="system-grid-view">
+            {% for row in zone.system_rows %}
+                <div class="law-row">
+                    <div style="position: relative;">
+                    {% if row.triplet[0] %}
+                        <div class="law-card" 
+                             data-name="{{ row.triplet[0].name }}" 
+                             data-dispname="{{ row.triplet[0].disp_name }}" 
+                             data-level="{{ row.triplet[0].level }}" 
+                             onclick="warp(this)">
+                            <img src="{{ url_for('static', filename='images/planet' ~ ((row.triplet[0].level % 20) + 1) ~ '.png') }}" class="planet-img-small {% if row.triplet[0].level == 0 %}grayscale{% endif %}">
+                            <div class="card-info">
+                                <span class="card-title">{{ row.triplet[0].disp_name }}</span>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="tree-connector"><div class="tree-line-v"></div><div class="tree-line-h"></div><div class="tree-dot"></div></div>
+                    {% endif %}
+                    </div>
+
+                    <div>
+                    {% if row.triplet[1] %}
+                        {% for item in row.triplet[1] %}
+                        <div class="law-card" 
+                             data-name="{{ item.name }}" 
+                             data-dispname="{{ item.disp_name }}" 
+                             data-level="{{ item.level }}" 
+                             onclick="warp(this)">
+                            <img src="{{ url_for('static', filename='images/planet' ~ ((item.level % 20) + 1) ~ '.png') }}" class="planet-img-small {% if item.level == 0 %}grayscale{% endif %}">
+                            <div class="card-info"><span class="card-title">{{ item.disp_name }}</span></div>
+                        </div>
+                        {% endfor %}
+                    {% endif %}
+                    </div>
+
+                    <div>
+                    {% if row.triplet[2] %}
+                        {% for item in row.triplet[2] %}
+                        <div class="law-card" 
+                             data-name="{{ item.name }}" 
+                             data-dispname="{{ item.disp_name }}" 
+                             data-level="{{ item.level }}" 
+                             onclick="warp(this)">
+                            <img src="{{ url_for('static', filename='images/planet' ~ ((item.level % 20) + 1) ~ '.png') }}" class="planet-img-small {% if item.level == 0 %}grayscale{% endif %}">
+                            <div class="card-info"><span class="card-title">{{ item.disp_name }}</span></div>
+                        </div>
+                        {% endfor %}
+                    {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+<div id="shopModal" class="modal-overlay" onclick="if(event.target==this)this.style.display='none'"><div class="shop-box"><h2 style="color:#ffd700;">🛠️ 상점</h2><div class="shop-item"><span>❄️ 시간 정지</span><button class="buy-btn" onclick="buyItem('freeze', 100)">100 P</button></div><div class="shop-item"><span>📡 힌트</span><button class="buy-btn" onclick="buyItem('scanner', 200)">200 P</button></div><button onclick="document.getElementById('shopModal').style.display='none'" style="margin-top:20px; background:#444; color:#fff; border:none; padding:8px 20px; cursor:pointer;">닫기</button></div></div>
+<div id="actModal" class="modal-overlay" onclick="if(event.target==this)this.style.display='none'"><div class="modal-box"><h3 id="mTitle" style="color:var(--accent-cyan); font-size:1.5rem; margin-bottom:10px;"></h3><p style="color:#ccc; margin-bottom:20px;">이 구역을 공략하시겠습니까?</p><form action="/game_start" method="POST" class="modal-btn-group"><input type="hidden" name="quest_name" id="mQName"><input type="hidden" name="action" id="mAction"><button type="submit" id="mBtn" class="pixel-btn">정복하기</button><button type="button" class="pixel-btn close-btn" onclick="document.getElementById('actModal').style.display='none'">취소</button></form></div></div>
+<script>
+    function openShop() { document.getElementById('shopModal').style.display = 'flex'; }
+    function buyItem(item, cost) { if(!confirm(item + " 구매하시겠습니까?")) return; fetch('/buy_item', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: `item=${item}&cost=${cost}` }).then(r=>r.json()).then(d => { alert(d.msg); if(d.success) location.reload(); }); }
+    function warp(element) {
+        const qName = element.getAttribute('data-name');
+        const dispName = element.getAttribute('data-dispname');
+        const level = parseInt(element.getAttribute('data-level'));
+        document.getElementById('mTitle').innerText = dispName;
+        document.getElementById('mQName').value = qName;
+        if (level > 0) {
+            document.getElementById('mAction').value = 'develop';
+            document.getElementById('mBtn').innerText = "✨ 발전하기 (복습)";
+        } else {
+            document.getElementById('mAction').value = 'terraform';
+            document.getElementById('mBtn').innerText = "⚔️ 정복하기";
+        }
+        document.getElementById('actModal').style.display = 'flex';
+    }
+    
+    // [신규] 텍스트 길이 자동 조절
+    function fitTitleText() {
+        const titles = document.querySelectorAll('.chapter-title-text');
+        titles.forEach(el => {
+            el.style.fontSize = '1rem';
+            const containerW = el.parentElement.clientWidth;
+            const textW = el.scrollWidth;
+            if (textW > containerW) {
+                const newSize = (containerW / textW) * 0.9;
+                el.style.fontSize = `${Math.max(newSize, 0.5)}rem`;
+            }
+        });
+    }
+    window.addEventListener('load', fitTitleText);
+    window.addEventListener('resize', fitTitleText);
+</script>
+{% endblock %}

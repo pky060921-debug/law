@@ -1,0 +1,214 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700&display=swap" rel="stylesheet">
+<style>
+    /* ... (기존 스타일 유지) ... */
+    :root { --paper-bg: #fff; --text-ink: #000; --font-serif: 'Nanum Myeongjo', serif; }
+    body { background-color: #e0e0e0; font-family: var(--font-serif); color: var(--text-ink); overflow: hidden; margin: 0; }
+    
+    .play-screen { height: 100dvh; display: flex; flex-direction: column; background: var(--paper-bg); max-width: 900px; margin: 0 auto; box-shadow: 0 0 20px rgba(0,0,0,0.1); position: relative; }
+    .play-header { height: 50px; background: #fff; flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; padding: 0 15px; border-bottom: 2px solid #000; position: relative; z-index: 10; }
+    .exam-title { font-size: 1rem; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 50%; }
+    .timer-display { font-size: 1.2rem; color: #c0392b; font-weight: bold; font-family: sans-serif; }
+    .item-dock { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; gap: 5px; }
+    .item-btn { background: #fff; color: #000; border: 1px solid #000; border-radius: 4px; padding: 2px 8px; font-weight: bold; cursor: pointer; font-size: 0.8rem; }
+    
+    .question-area { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; align-items: center; }
+    .q-box-label { width: 100%; text-align: left; font-weight: bold; margin-bottom: 10px; font-size: 1rem; }
+    .q-box { border: 2px solid #000; padding: 20px; width: 100%; height: 100%; font-size: 1.1rem; line-height: 2.0; background: #fff; white-space: pre-wrap; word-break: keep-all; text-align: left; box-sizing: border-box; }
+    
+    .options-area { background: #f9f9f9; padding: 10px; border-top: 1px solid #ccc; flex-shrink: 0; height: auto; min-height: 80px; padding-bottom: 100px; }
+    .options-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+    .option-btn { background: #fff; border: 1px solid #aaa; padding: 10px 5px; text-align: center; font-family: var(--font-serif); font-size: 0.9rem; cursor: pointer; transition: 0.2s; border-radius: 4px; width: 100%; word-break: break-word; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 50px; }
+    .option-btn:hover { background: #eee; border-color: #000; }
+    
+    .q-blank { display: inline-block; min-width: 50px; height: 1.2em; border-bottom: 2px solid #555; vertical-align: baseline; margin: 0 2px; background: transparent; color: transparent; text-align: center; font-weight: bold; padding: 0 3px; transition: all 0.2s; }
+    .q-blank.active { border-bottom: 3px solid #007bff; background: rgba(0,123,255,0.05); }
+    .q-blank.filled { border-bottom: 2px solid #000; color: #000; width: auto; }
+
+    /* [수정] 맵 버튼 z-index 및 위치 조정 */
+    .map-return-btn { position: fixed; bottom: 20px; right: 20px; z-index: 5000; background: #333; color: #fff; border: 2px solid #fff; padding: 8px 12px; border-radius: 30px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 5px; font-size: 0.8rem; }
+    
+    .result-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 6000; display: flex; justify-content: center; align-items: center; }
+    .result-box { background: #fff; border: 2px solid #000; padding: 40px; text-align: center; width: 90%; max-width: 400px; font-family: var(--font-serif); }
+    .pixel-btn { background: #000; color: #fff; border: none; padding: 10px 20px; font-size: 1rem; cursor: pointer; text-decoration: none; display: inline-block; margin-top: 10px; width: 100%; box-sizing: border-box; }
+    .btn-secondary { background: #555; }
+    
+    @media (max-width: 480px) { .options-grid { grid-template-columns: repeat(2, 1fr); } }
+</style>
+
+<div class="play-screen">
+    <div class="play-header">
+        <div class="exam-title"><span id="stageBadge" style="border:1px solid #000; padding:1px 4px; font-size:0.7rem; margin-right:5px; vertical-align:middle;">법률</span><span id="stageTitle">제1조</span></div>
+        <div class="item-dock">
+            <button class="item-btn" onclick="useFreeze()">❄️ 정지 ({{ user_items.item_freeze }})</button>
+            <button class="item-btn" onclick="useScanner()">📡 힌트 ({{ user_items.item_scanner }})</button>
+        </div>
+        <div class="timer-display" id="timerDisplay">0.0</div>
+    </div>
+    <div class="question-area">
+        <div class="q-box-label" id="qNumLabel">문항 1. 빈칸을 채우시오.</div>
+        <div class="q-box" id="qText"></div>
+    </div>
+    <div class="options-area"><div class="options-grid" id="optionsGrid"></div></div>
+    
+    <button type="button" class="map-return-btn" onclick="location.href='/lobby'">🗺️ 맵으로</button>
+</div>
+
+<form id="winForm" method="POST" style="display:none;"><input type="hidden" name="duration" id="gDuration"></form>
+
+<div id="failModal" class="result-overlay" style="display:none;">
+    <div class="result-box">
+        <h2 style="color:#e74c3c;">정 복 실 패</h2>
+        <p>오답입니다.</p>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <form action="/game_start" method="POST">
+                <input type="hidden" name="quest_name" value="{{ title }}">
+                <input type="hidden" name="action" value="{{ mode }}">
+                <button type="submit" class="pixel-btn">⚔️ 다시 정복</button>
+            </form>
+            <button type="button" class="pixel-btn btn-secondary" onclick="location.href='/lobby'">🗺️ 맵으로</button>
+        </div>
+    </div>
+</div>
+
+{% if show_result %}
+<div class="result-overlay">
+    <div class="result-box">
+        <h1 style="color:#2ecc71;">정 복 완 료</h1>
+        <p>등급: 1등급 (Lv.{{ reward_lv }})</p>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            {% if next_quest %}
+            <form action="/game_start" method="POST">
+                <input type="hidden" name="quest_name" value="{{ next_quest }}">
+                <input type="hidden" name="action" value="develop">
+                <button type="submit" class="pixel-btn">🚀 다음 행성</button>
+            </form>
+            {% endif %}
+            <button type="button" onclick="location.href='/lobby'" class="pixel-btn btn-secondary">🏁 여기까지</button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+    const stages = {{ stages | tojson }};
+    const timePerBlank = {{ time_per_blank }};
+    let currentStageIdx = 0;
+    let currentBlankIdx = 0;
+    let timerInterval;
+    let timeLeft = 0;
+    let startTime = Date.now();
+
+    window.onload = function() {
+        if (!{{ 'true' if show_result else 'false' }}) {
+            if (stages.length > 0) loadStage(0);
+            else { alert("문제 생성 실패"); location.href='/lobby'; }
+        }
+    };
+
+    function loadStage(idx) {
+        currentStageIdx = idx;
+        currentBlankIdx = 0;
+        const data = stages[idx];
+        
+        document.getElementById('stageTitle').innerText = data.stage_name;
+        document.getElementById('stageBadge').innerText = data.q_type;
+        document.getElementById('qNumLabel').innerText = `문항 ${idx + 1}. 빈칸을 채우시오.`;
+        document.getElementById('qText').innerHTML = data.html;
+        
+        const blankCount = data.targets.length;
+        timeLeft = blankCount * timePerBlank;
+        
+        activateBlank(0);
+        resetTimer();
+    }
+
+    function activateBlank(blankIdx) {
+        document.querySelectorAll('.q-blank').forEach(el => el.classList.remove('active'));
+        
+        const data = stages[currentStageIdx];
+        if (blankIdx < data.targets.length) {
+            const targetBlank = document.getElementById(`blank-${blankIdx}`);
+            if (targetBlank) {
+                targetBlank.classList.add('active');
+                targetBlank.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                renderOptions(blankIdx);
+            }
+        } else {
+            if (currentStageIdx + 1 < stages.length) {
+                setTimeout(() => {
+                    loadStage(currentStageIdx + 1);
+                }, 300);
+            } else {
+                clearInterval(timerInterval);
+                document.getElementById('gDuration').value = ((Date.now() - startTime)/1000).toFixed(1);
+                document.getElementById('winForm').submit();
+            }
+        }
+    }
+
+    function renderOptions(blankIdx) {
+        const grid = document.getElementById('optionsGrid');
+        grid.innerHTML = '';
+        
+        const data = stages[currentStageIdx];
+        const opts = data.options_map[String(blankIdx)];
+        
+        if (opts) {
+            opts.forEach((word, i) => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.innerText = word;
+                btn.onclick = () => checkAnswer(word);
+                grid.appendChild(btn);
+            });
+        }
+    }
+
+    function resetTimer() {
+        clearInterval(timerInterval);
+        document.getElementById('timerDisplay').innerText = timeLeft.toFixed(1);
+        timerInterval = setInterval(() => {
+            timeLeft -= 0.1;
+            if(timeLeft <= 0) {
+                timeLeft = 0;
+                document.getElementById('timerDisplay').innerText = "0.0";
+                clearInterval(timerInterval);
+                document.getElementById('failModal').style.display = 'flex';
+            } else {
+                document.getElementById('timerDisplay').innerText = timeLeft.toFixed(1);
+            }
+        }, 100);
+    }
+
+    function checkAnswer(word) {
+        const data = stages[currentStageIdx];
+        const correctAns = data.targets[currentBlankIdx];
+        
+        if (word.replace(/\s/g,'') === correctAns.replace(/\s/g,'')) {
+            const blankEl = document.getElementById(`blank-${currentBlankIdx}`);
+            blankEl.innerText = word;
+            blankEl.classList.remove('active');
+            blankEl.classList.add('filled');
+            currentBlankIdx++;
+            activateBlank(currentBlankIdx);
+        } else {
+            clearInterval(timerInterval);
+            document.getElementById('failModal').style.display = 'flex';
+        }
+    }
+    
+    function useFreeze() { alert("시험 시간에는 시간을 멈출 수 없습니다."); }
+    function useScanner() { 
+        fetch('/use_item_ingame', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({item: 'scanner'}) }).then(r=>r.json()).then(d=>{
+            if(d.success) { 
+                const ans = stages[currentStageIdx].targets[currentBlankIdx]; 
+                checkAnswer(ans); 
+            } 
+            else alert("아이템 부족"); 
+        });
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,70 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<style>
+    body { background-color: #0b0d17; color: #fff; }
+    .collection-header { text-align: center; padding: 30px; border-bottom: 1px solid #333; }
+    .card-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; padding: 40px; }
+    
+    /* 행성 카드 스타일 */
+    .planet-card {
+        width: 180px; height: 260px;
+        background: linear-gradient(135deg, #2c3e50, #000);
+        border: 4px solid #ffd700; /* 골드 테두리 */
+        border-radius: 10px;
+        position: relative;
+        display: flex; flex-direction: column; align-items: center;
+        box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+        transition: transform 0.3s;
+        cursor: pointer;
+    }
+    .planet-card:hover { transform: translateY(-10px) scale(1.05); z-index: 10; }
+    
+    .card-level-stars { position: absolute; top: 10px; right: 10px; color: #ffd700; font-size: 0.9rem; letter-spacing: -2px; }
+    .card-img-box {
+        width: 140px; height: 140px; background: #000; margin-top: 30px;
+        border: 2px solid #555; border-radius: 50%;
+        display: flex; justify-content: center; align-items: center;
+        overflow: hidden;
+    }
+    .card-planet-img { width: 100%; height: 100%; object-fit: cover; }
+    
+    .card-title {
+        margin-top: 15px; font-weight: bold; color: #fff; font-size: 0.9rem; text-align: center; padding: 0 10px;
+        text-shadow: 0 0 3px #000;
+    }
+    .card-type {
+        font-size: 0.7rem; color: #aaa; margin-top: 5px; border: 1px solid #555; padding: 2px 6px; border-radius: 4px;
+    }
+</style>
+
+<div class="collection-header">
+    <h2 style="color:var(--accent-cyan); margin:0;">🪐 행성 도감 (Collection)</h2>
+    <p style="color:#888;">정복한 행성들의 카드가 이곳에 수집됩니다.</p>
+</div>
+
+<div class="card-grid">
+    {% if cards %}
+        {% for c in cards %}
+        <div class="planet-card">
+            <div class="card-level-stars">
+                {% for i in range(c.level) %}★{% endfor %}
+            </div>
+            <div class="card-img-box">
+                <img src="/static/images/planet{{ (loop.index % 20) + 1 }}.png" class="card-planet-img">
+            </div>
+            <div class="card-title">{{ c.quest_name }}</div>
+            <div class="card-type">LV.{{ c.level }}</div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div style="color:#666; text-align:center; width:100%; padding:50px;">
+            아직 수집한 행성 카드가 없습니다.<br>탐험을 통해 행성을 정복하세요!
+        </div>
+    {% endif %}
+</div>
+
+<div style="text-align:center; padding-bottom:50px;">
+    <a href="/lobby" class="pixel-btn">⬅ 로비로 돌아가기</a>
+</div>
+{% endblock %}
