@@ -46,22 +46,64 @@ def natural_sort_key(text):
     return [int(c) if c.isdigit() else c for c in re.split(r'(\d+)', text)]
 
 def extract_candidates(text):
+    """
+    [BLANK DIMENSION V4 - 33가지 심화 출제 규칙 적용]
+    단순 단어가 아닌 법적 의미가 변하는 '구(Phrase)' 단위로 빈칸을 추출합니다.
+    """
     candidates = []
     
+    # 1. 조문 제목 (괄호 안 내용)
     titles = re.findall(r'\(([^)]+)\)', text)
     for t in titles:
         if len(t) >= 2 and not re.match(r'^\d+$', t):
             candidates.append(t.strip())
-            
-    numbers = re.findall(r'\d+(?:일|개월|년|만원|명|분의\s*\d+)', text)
-    candidates.extend(numbers)
-    
+
+    # 2. 33가지 특수 킬러 패턴 정규식 추출
+    complex_patterns = [
+        r'(?:즉시|특별한|1건당|특히|모든|최초로|미리|지체\s*없이)\s+[가-힣]+', # 부사+명사 함정
+        r'(?:대통령령|보건복지부령|공단|공단의 이사장|보건복지부장관|정관|심사평가원장|심사평가원의 정관)(?:으로|이)\s*정(?:한다|하여 고시한다)',
+        r'[가-힣\s]*위원회',
+        r'\d+(?:일|개월|년)\s*이내|\d+개월의\s*범위', # 기간
+        r'(?:보건복지부장관|장관)이\s*정하는(?: 바에 따라)?',
+        r'(?:보건복지부장관|공단)의\s*승인',
+        r'협의|합의',
+        r'노동조합|근로자단체',
+        r'형법 제\d+조(?:부터 제\d+조까지)?',
+        r'[가-힣]{2,4}(?:할\s*수\s*있다|하여야\s*한다|해야\s*한다|한다|된다)', # 서술어 함정
+        r'(?:공단|정관|공단의\s*정관)이\s*정하는\s*(?:바|기간|가액|금액)|공단이\s*(?:지정하는|인정하는)',
+        r'공단의\s*이사장|공단',
+        r'재해|천재지변',
+        r'의료계|의약계|의약관계',
+        r'휴업|폐업|합병|폐쇄|폐교',
+        r'국고금관리법|국세징수법|국세기본법|민법',
+        r'상당하는|해당하는',
+        r'전전년도|전년도|해당연도',
+        r'과세표준금액|과세표준|과세정보|과세자료|재산자료',
+        r'보험료예상수입|보험료수입|보험료등납부금액',
+        r'[가-힣]+에게 자료(?: 제출)?을\s*요청|의견(?: 제출)?을\s*요청',
+        r'이의신청|심판청구|행정소송',
+        r'[가-힣]+로\s*(?:이용|누설|활용|제공)',
+        r'연구기관|전문단체|비영리법인|전문가|단체|법인|대학',
+        r'(?:1천|1천500|3천|6천|1만|100)분의\s*\d+', # 비율
+        r'속하는\s*달의\s*다음달|속하는\s*달|인상된\s*달|인하된\s*달|변동된\s*달|전\s*달|그달',
+        r'(?:해당(?:되는|하게 된)\s*날|그\s*날|된\s*날|자격이\s*변동된\s*날|사유가\s*발생한\s*날|자격을\s*잃은\s*날|변경된\s*날|결정을\s*한\s*날|접수한\s*날|지난\s*날|해지한\s*날|사유가\s*생긴\s*날|부과된\s*날|기한이\s*지난\s*날|기한의\s*다음날|처분이\s*있은\s*날|안\s*날|통보받은\s*날|끝난\s*날|취득한\s*날|고시하는\s*날|전출된\s*날|전출한\s*날|통지를\s*받은\s*날|지급보류한\s*날|지급하는\s*날|확인한\s*날|발생한\s*날|받은\s*날|제출된\s*날|발급하는\s*날|신청을\s*받은\s*날|따른\s*날|납부하는\s*날까지)',
+        r'(?:서면|문서)으로\s*(?:통보|통지|알려야)|서면통지',
+        r'보험료등|보험료|연체금|가산금|체납처분비',
+        r'징수위탁근거법|징수위탁보험료등'
+    ]
+
+    for p in complex_patterns:
+        matches = re.findall(p, text)
+        for m in matches:
+            candidates.append(m.strip())
+
+    # 3. 기본 명사 추출 (기존 로직 보완)
     clean_text = re.sub(r'[0-9]+\.|[가-힣]\.|[①-⑮]', ' ', text)
     clean_text = re.sub(r'\([^)]+\)', ' ', clean_text)
     words = re.findall(r'[가-힣0-9]{2,}', clean_text)
     
-    josas = ['은', '는', '이', '가', '을', '를', '의', '에', '로', '으로', '에서', '에게', '하여야', '한다', '할 수']
-    stop_words = ["경우", "또는", "있다", "없다", "관한", "따른", "별표"]
+    josas = ['은', '는', '이', '가', '을', '를', '의', '에', '로', '으로', '에서', '에게']
+    stop_words = ["경우", "또는", "있다", "없다", "관한", "따른", "별표", "어느", "하나", "각호", "대하여", "아니하다", "제외한다", "해당하는"]
     
     for w in words:
         if w in stop_words: continue
@@ -75,10 +117,84 @@ def extract_candidates(text):
     return list(set(candidates))
 
 def get_similar_distractors(target, count=4):
+    """
+    [맞춤형 함정 보기 생성기]
+    정답의 패턴을 분석하여 수험생이 가장 헷갈려하는 4지선다를 동적으로 구성합니다.
+    """
     global GLOBAL_WORD_POOL
+    target = target.strip()
+    
+    # 규칙 1: 수식어 유무 함정 (즉시, 미리, 지체 없이 등)
+    m1 = re.match(r'(즉시|특별한|1건당|특히|모든|최초로|미리|지체\s*없이)\s+([가-힣]+)', target)
+    if m1:
+        bw = m1.group(2)
+        pool = [bw, f"미리 {bw}", f"지체 없이 {bw}", f"즉시 {bw}", f"특별한 {bw}", f"모든 {bw}"]
+        pool = [p for p in pool if p.replace(" ", "") != target.replace(" ", "")]
+        return random.sample(pool, min(len(pool), count))
+
+    # 규칙 2: 제정 주체 함정
+    m2 = re.match(r'(대통령령|보건복지부령|공단|공단의 이사장|보건복지부장관|정관|심사평가원장|심사평가원의 정관)(으로|이)\s*정(한다|하여 고시한다)', target)
+    if m2:
+        pool = ["대통령령으로 정한다", "보건복지부령으로 정한다", "보건복지부장관이 정하여 고시한다", "공단이 정한다", "공단의 이사장이 정한다", "정관으로 정한다", "심사평가원의 정관으로 정한다"]
+        pool = [p for p in pool if p.replace(" ", "") != target.replace(" ", "")]
+        return random.sample(pool, min(len(pool), count))
+
+    # 규칙 10: 강제성/재량성 종결어 함정 (할 수 있다 vs 해야 한다)
+    m10 = re.match(r'([가-힣]{2,4})(할\s*수\s*있다|하여야\s*한다|해야\s*한다|한다|된다)', target)
+    if m10:
+        verb = m10.group(1)
+        pool = [f"{verb}할 수 있다", f"{verb}하여야 한다", f"{verb}한다", f"{verb}되지 아니한다"]
+        pool = [p for p in pool if p.replace(" ", "") != target.replace(" ", "")]
+        return random.sample(pool, min(len(pool), count))
+
+    # 하드코딩된 특수 헷갈림 단어풀 (규칙 3, 4, 6, 7, 8, 14, 15, 16 등 반영)
+    static_map = {
+        '위원회': ["보건의료정책심의위원회", "건강보험정책심의위원회", "재정운영위원회", "업무정지처분심의위원회", "장기요양위원회", "인사위원회", "국무회의"],
+        '이내': ["7일 이내", "10일 이내", "14일 이내", "15일 이내", "20일 이내", "30일 이내", "1개월 이내", "3개월 이내", "1개월의 범위"],
+        '보건복지부장관이 정하는': ['보건복지부장관이 정하는 바에 따라', '보건복지부장관이 정하는', '대통령령으로 정하는', '공단이 정하는', '보건복지부령으로 정하는'],
+        '승인': ['보건복지부장관의 승인', '공단의 승인', '대통령의 승인', '심사평가원장의 승인'],
+        '협의': ['협의', '합의', '승인', '의결'],
+        '합의': ['협의', '합의', '승인', '의결'],
+        '노동조합': ['노동조합', '근로자단체', '사용자협의회', '시민단체'],
+        '근로자단체': ['노동조합', '근로자단체', '사용자협의회', '시민단체'],
+        '형법 제': ["형법 제129조부터 제132조까지", "형법 제120조", "민법 제750조", "국가보안법 제3조"],
+        '공단이 정하는 바': ['공단이 정하는 바', '공단의 정관이 정하는 기간', '정관이 정하는 금액', '공단이 지정하는'],
+        '재해': ['재해', '천재지변', '사변', '전쟁'],
+        '천재지변': ['재해', '천재지변', '사변', '전쟁'],
+        '의료계': ['의료계', '의약계', '의약관계', '시민단체'],
+        '의약계': ['의료계', '의약계', '의약관계', '시민단체'],
+        '휴업': ['휴업', '폐업', '합병', '폐쇄', '폐교'],
+        '폐업': ['휴업', '폐업', '합병', '폐쇄', '폐교'],
+        '국고금관리법': ['국고금관리법', '국세징수법', '국세기본법', '민법', '국가재정법'],
+        '상당하는': ['상당하는', '해당하는', '초과하는', '미달하는'],
+        '해당하는': ['상당하는', '해당하는', '초과하는', '미달하는'],
+        '전년도': ['전전년도', '전년도', '해당연도', '다음연도'],
+        '과세표준': ['과세표준', '과세정보', '과세표준금액', '과세자료', '재산자료'],
+        '보험료수입': ['보험료수입', '보험료예상수입', '보험료등납부금액', '징수위탁보험료등'],
+        '이의신청': ['이의신청', '심판청구', '행정소송', '민사소송'],
+        '연구기관': ['연구기관', '전문단체', '비영리법인', '전문가', '단체', '법인', '대학'],
+        '분의': ["1천분의 10", "1천500분의 10", "3천분의 10", "6천분의 10", "1만분의 10", "100분의 50", "100분의 100"],
+        '날': ["해당하게 된 날", "그 날", "사유가 발생한 날", "자격을 잃은 날", "통보받은 날", "다음 날", "안 날", "결정을 한 날", "신청을 받은 날"],
+        '서면': ["서면으로 통보", "문서로 통지", "구두로 통지", "서면통지", "전화로 통보"],
+        '통보': ["서면으로 통보", "문서로 통지", "구두로 통지", "서면통지", "전화로 통보"],
+        '보험료': ['보험료', '보험료등', '연체금', '가산금', '체납처분비']
+    }
+    
+    # 딕셔너리 키 매칭
+    for k, v in static_map.items():
+        if k in target:
+            pool = [p for p in v if p.replace(" ", "") != target.replace(" ", "")]
+            if pool:
+                # 보기가 모자라면 글로벌 풀에서 비슷한 길이 단어 보충
+                if len(pool) < count:
+                    others = [w for w in GLOBAL_WORD_POOL if len(w) == len(target)]
+                    pool += random.sample(others, min(len(others), count - len(pool)))
+                return random.sample(pool, min(len(pool), count))
+
+    # 위 규칙에 해당하지 않는 일반 단어 처리 (숫자끼리, 글자수끼리 맞춤)
     if not GLOBAL_WORD_POOL:
         return ["권한", "책임", "의무", "위반"]
-    
+        
     if any(char.isdigit() for char in target):
         num_pool = [w for w in GLOBAL_WORD_POOL if any(c.isdigit() for c in w) and w != target]
         if len(num_pool) >= count:
@@ -93,25 +209,40 @@ def get_similar_distractors(target, count=4):
     
     return distractors
 
-def auto_generate_blanks(text, limit=999):
+def auto_generate_blanks(text, limit=4):
+    """
+    텍스트에 자동으로 빈칸 생성
+    우선순위: 위에서 정의된 긴 구절(Killers) -> 단일 명사
+    """
     if '{' in text and '}' in text:
         return text
     
     candidates = extract_candidates(text)
     if not candidates:
         return text
-    
-    candidates.sort(key=len, reverse=True)
+        
+    # 빈칸 뚫을 때 우선순위 스코어링 (점수가 높을수록 무조건 먼저 빈칸 됨)
+    def get_score(word):
+        score = len(word) * 10 # 기본적으로 긴 구절 우선 (예: '대통령령으로 정한다' > '대통령령')
+        if re.search(r'\d', word): score += 50 # 숫자 우선
+        if word.endswith('한다') or word.endswith('있다'): score += 40 # 서술어 함정 우선
+        if '위원회' in word or '날' in word: score += 30 # 위원회, 날짜 우선
+        return score
+
+    # 점수가 높은 순서대로 적용
+    scored_candidates = sorted(candidates, key=lambda w: get_score(w), reverse=True)
     
     new_text = text
     count = 0
-    for t in candidates:
+    for t in scored_candidates:
         if count >= limit:
             break
+        # 이미 빈칸({ }) 처리된 부분에 포함되어 있는지 확인하여 중복 방지
         if re.search(r'\{[^}]*' + re.escape(t) + r'[^}]*\}', new_text):
             continue
         new_text = new_text.replace(t, f"{{{t}}}")
         count += 1
+        
     return new_text
 
 def split_content_smartly(text):
