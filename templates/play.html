@@ -6,65 +6,92 @@
     :root { --paper-bg: #fff; --text-ink: #000; --font-serif: 'Nanum Myeongjo', serif; }
     body { background-color: #2c3e50; font-family: var(--font-serif); color: var(--text-ink); overflow: hidden; margin: 0; }
     
-    .play-screen { height: 100dvh; display: flex; flex-direction: column; background: #ecf0f1; max-width: 900px; margin: 0 auto; position: relative; }
+    .play-screen { height: 100dvh; display: flex; flex-direction: column; background: #ecf0f1; max-width: 900px; margin: 0 auto; position: relative; transition: transform 0.1s; }
     
-    /* [신규] 배틀 그라운드 영역 */
-    .battle-header { background: #1a252f; padding: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #e74c3c; color: white; position: relative; z-index: 10; }
-    .enemy-container { display: flex; align-items: center; gap: 15px; }
-    .enemy-img { width: 60px; height: 60px; filter: drop-shadow(0 0 10px #e74c3c); animation: float 3s ease-in-out infinite; }
-    @keyframes float { 0% { transform: translateY(0px); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0px); } }
-    .enemy-name { font-size: 1.1rem; font-weight: bold; color: #ff7675; margin-bottom: 5px; }
+    /* [전투 UI] 헤더 영역 강화 */
+    .play-header { 
+        height: 70px; background: #1a252f; flex-shrink: 0; display: flex; 
+        justify-content: space-between; align-items: center; padding: 0 15px; 
+        border-bottom: 3px solid #e74c3c; color: white; position: relative; z-index: 10; 
+    }
+    .enemy-info { display: flex; align-items: center; gap: 12px; }
+    .enemy-img { width: 50px; height: 50px; filter: drop-shadow(0 0 5px #e74c3c); animation: float 3s ease-in-out infinite; }
+    @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
     
-    /* [신규] 생명력(HP) 게이지 */
-    .hp-bar-container { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
-    .hp-hearts { font-size: 1.5rem; letter-spacing: 2px; }
-    .timer-display { font-size: 1.1rem; font-family: sans-serif; color: #f1c40f; font-weight: bold; }
+    .hp-display { font-size: 1.4rem; letter-spacing: 2px; }
+    .timer-display { font-size: 1.2rem; color: #f1c40f; font-weight: bold; font-family: sans-serif; }
     
     .question-area { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; align-items: center; background: url("{{ url_for('static', filename='images/base.png') }}") center/cover; }
-    .q-box { border: 3px solid #34495e; padding: 25px; width: 100%; font-size: 1.15rem; line-height: 2.2; background: rgba(255, 255, 255, 0.95); white-space: pre-wrap; word-break: keep-all; text-align: left; box-sizing: border-box; border-radius: 8px; box-shadow: 0 10px 20px rgba(0,0,0,0.3); position: relative; }
+    .q-box-container { width: 100%; height: 100%; position: relative; }
+    .q-box { 
+        border: 3px solid #34495e; padding: 25px; width: 100%; height: 100%; 
+        font-size: 1.15rem; line-height: 2.2; background: rgba(255, 255, 255, 0.95); 
+        white-space: pre-wrap; word-break: keep-all; text-align: left; 
+        box-sizing: border-box; border-radius: 8px; box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+    }
     
-    .options-area { background: #bdc3c7; padding: 15px; border-top: 3px solid #7f8c8d; flex-shrink: 0; padding-bottom: 30px; }
+    /* 법률 용어 옵션 영역 */
+    .options-area { background: #bdc3c7; padding: 15px; border-top: 3px solid #7f8c8d; flex-shrink: 0; padding-bottom: 35px; }
     .options-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
     @media (min-width: 600px) { .options-grid { grid-template-columns: repeat(4, 1fr); } }
     
-    .option-btn { background: #fff; border: 2px solid #2c3e50; padding: 15px 10px; text-align: center; font-family: var(--font-serif); font-size: 1rem; font-weight: bold; cursor: pointer; border-radius: 6px; box-shadow: 0 4px 0 #2c3e50; transition: transform 0.1s, box-shadow 0.1s; }
+    .option-btn { 
+        background: #fff; border: 2px solid #2c3e50; padding: 15px 10px; 
+        text-align: center; font-family: var(--font-serif); font-size: 1rem; 
+        font-weight: bold; cursor: pointer; border-radius: 6px; 
+        box-shadow: 0 4px 0 #2c3e50; transition: transform 0.1s, box-shadow 0.1s; 
+    }
     .option-btn:active { transform: translateY(4px); box-shadow: 0 0 0 #2c3e50; }
     
-    .q-blank { display: inline-block; min-width: 60px; height: 1.2em; border-bottom: 3px dashed #7f8c8d; vertical-align: baseline; margin: 0 5px; background: rgba(0,0,0,0.05); color: transparent; text-align: center; font-weight: bold; padding: 0 5px; transition: all 0.2s; border-radius: 3px; }
+    /* 빈칸 스타일 */
+    .q-blank { 
+        display: inline-block; min-width: 60px; height: 1.2em; border-bottom: 3px dashed #7f8c8d; 
+        vertical-align: baseline; margin: 0 5px; background: rgba(0,0,0,0.05); 
+        color: transparent; text-align: center; font-weight: bold; padding: 0 5px; 
+        transition: all 0.2s; border-radius: 3px; 
+    }
     .q-blank.active { border-bottom: 4px solid #3498db; background: rgba(52, 152, 219, 0.15); animation: blink-blank 1s infinite; }
     @keyframes blink-blank { 50% { background: transparent; } }
     .q-blank.filled { border-bottom: none; color: #fff; background: #27ae60; width: auto; text-shadow: 1px 1px 0 #000; padding: 2px 8px; }
 
-    /* 데미지 피격 효과 */
-    .damage-flash { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(231, 76, 60, 0.5); z-index: 100; pointer-events: none; opacity: 0; transition: opacity 0.1s; }
-    .shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+    /* 피격 효과 */
+    .damage-flash { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(231, 76, 60, 0.5); z-index: 100; pointer-events: none; opacity: 0; }
+    .shake { animation: shake 0.4s both; }
     @keyframes shake { 10%, 90% { transform: translate3d(-3px, 0, 0); } 20%, 80% { transform: translate3d(4px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-6px, 0, 0); } 40%, 60% { transform: translate3d(6px, 0, 0); } }
 
+    /* 결과 모달 */
     .result-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 6000; display: flex; justify-content: center; align-items: center; }
     .result-box { background: #fff; border: 4px solid #2c3e50; padding: 40px; text-align: center; width: 90%; max-width: 400px; font-family: var(--font-serif); border-radius: 8px; }
     .pixel-btn { background: #2980b9; color: #fff; border: none; padding: 15px 20px; font-size: 1.1rem; font-weight: bold; cursor: pointer; border-radius: 6px; width: 100%; margin-top: 10px; }
+    
+    /* 맵 복귀 버튼 */
+    .map-return-btn { position: fixed; bottom: 20px; right: 20px; z-index: 5000; background: #2c3e50; color: #fff; border: 2px solid #fff; padding: 10px 16px; border-radius: 30px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 0.9rem; }
 </style>
 
-<div class="play-screen" id="battleScreen">
+<div class="play-screen" id="playScreen">
     <div class="damage-flash" id="damageFlash"></div>
-    <div class="battle-header">
-        <div class="enemy-container">
-            <img src="{{ url_for('static', filename='images/enemy.png') }}" onerror="this.src='{{ url_for('static', filename='images/planet2.png') }}'" class="enemy-img" id="enemyAvatar">
+    <div class="play-header">
+        <div class="enemy-info">
+            <img src="{{ url_for('static', filename='images/enemy.png') }}" onerror="this.src='{{ url_for('static', filename='images/planet_1.png') }}'" class="enemy-img" id="enemyAvatar">
             <div>
-                <div class="enemy-name" id="stageBadge">AI 지휘관</div>
-                <div style="font-size:0.8rem; color:#aaa;" id="stageTitle">제1구역</div>
+                <div style="font-size:0.7rem; color:#aaa;" id="stageBadge">법령 방어선</div>
+                <div style="font-size:1.1rem; font-weight:bold; color:#ff7675;" id="stageTitle">제1구역</div>
             </div>
         </div>
-        <div class="hp-bar-container">
-            <div class="hp-hearts" id="hpDisplay">❤️❤️❤️❤️❤️</div>
+        <div class="battle-stats">
+            <div class="hp-display" id="hpDisplay">❤️❤️❤️❤️❤️</div>
             <div class="timer-display" id="timerDisplay">TIME 0.0</div>
         </div>
     </div>
     
     <div class="question-area">
-        <div class="q-box" id="qText"></div>
+        <div class="q-box-container">
+            <div class="q-box" id="qText"></div>
+        </div>
     </div>
     <div class="options-area"><div class="options-grid" id="optionsGrid"></div></div>
+    
+    <button type="button" class="map-return-btn" onclick="location.href='/lobby'">🗺️ 차원 맵으로 후퇴</button>
 </div>
 
 <form id="winForm" method="POST" style="display:none;"><input type="hidden" name="duration" id="gDuration"></form>
@@ -72,8 +99,8 @@
 <div id="failModal" class="result-overlay" style="display:none;">
     <div class="result-box">
         <h2 style="color:#e74c3c;">함대 파괴됨</h2>
-        <p style="color:#555;">적군의 강력한 논리 공격에 당했습니다.</p>
-        <button type="button" class="pixel-btn" onclick="location.href='/lobby'">🗺️ 차원 맵으로 후퇴</button>
+        <p>적군의 강력한 논리 공격에 당했습니다.</p>
+        <button type="button" class="pixel-btn" onclick="location.href='/lobby'">🗺️ 차원 맵으로 복귀</button>
     </div>
 </div>
 
@@ -82,20 +109,27 @@
     <div class="result-box">
         <h2 style="color:#27ae60;">적군 소탕 완료!</h2>
         <p>보상 획득: Lv.{{ reward_lv }} GOAL 코인</p>
-        {% if next_quest %}
-        <form action="/game_start" method="POST"><input type="hidden" name="quest_name" value="{{ next_quest }}"><input type="hidden" name="action" value="develop"><button type="submit" class="pixel-btn">🚀 다음 구역 진격</button></form>
-        {% endif %}
-        <button type="button" onclick="location.href='/lobby'" class="pixel-btn" style="background:#7f8c8d;">🏁 복귀</button>
+        <div style="display:flex; flex-direction:column; gap:10px; margin-top:20px;">
+            {% if next_quest %}
+            <form action="/game_start" method="POST">
+                <input type="hidden" name="quest_name" value="{{ next_quest }}">
+                <input type="hidden" name="action" value="develop">
+                <button type="submit" class="pixel-btn">🚀 다음 구역 진격</button>
+            </form>
+            {% endif %}
+            <button type="button" onclick="location.href='/lobby'" class="pixel-btn" style="background:#7f8c8d;">🏁 복귀</button>
+        </div>
     </div>
 </div>
 {% endif %}
 
 <script>
     const stages = {{ stages | tojson }};
+    const timePerBlank = {{ time_per_blank }};
     let currentStageIdx = 0, currentBlankIdx = 0;
     let timerInterval, timeLeft = 0, startTime = Date.now();
     
-    // [신규] 생명력(HP) 시스템 (기본 5개)
+    // 생명력 시스템 (5개)
     let maxHp = 5, currentHp = 5;
 
     window.onload = function() {
@@ -117,10 +151,13 @@
         
         // 피격 이펙트
         const flash = document.getElementById('damageFlash');
-        const screen = document.getElementById('battleScreen');
+        const screen = document.getElementById('playScreen');
         flash.style.opacity = '1';
         screen.classList.add('shake');
-        setTimeout(() => { flash.style.opacity = '0'; screen.classList.remove('shake'); }, 200);
+        setTimeout(() => { 
+            flash.style.opacity = '0'; 
+            screen.classList.remove('shake'); 
+        }, 300);
         
         if(currentHp <= 0) {
             clearInterval(timerInterval);
@@ -136,8 +173,11 @@
         document.getElementById('stageBadge').innerText = data.q_type + " 방어선";
         document.getElementById('qText').innerHTML = data.html;
         
-        timeLeft = data.targets.length * 15; // 빈칸당 15초 부여
-        activateBlank(0); resetTimer();
+        // 모든 빈칸 개수만큼 시간 설정 (무제한 빈칸 지원)
+        timeLeft = data.targets.length * timePerBlank;
+        
+        activateBlank(0);
+        resetTimer();
     }
 
     function activateBlank(blankIdx) {
@@ -162,8 +202,10 @@
     }
 
     function renderOptions(blankIdx) {
-        const grid = document.getElementById('optionsGrid'); grid.innerHTML = '';
-        const opts = stages[currentStageIdx].options_map[String(blankIdx)];
+        const grid = document.getElementById('optionsGrid');
+        grid.innerHTML = '';
+        const data = stages[currentStageIdx];
+        const opts = data.options_map[String(blankIdx)];
         if (opts) {
             opts.forEach(word => {
                 const btn = document.createElement('button');
@@ -179,28 +221,44 @@
         document.getElementById('timerDisplay').innerText = `TIME ${timeLeft.toFixed(1)}`;
         timerInterval = setInterval(() => {
             timeLeft -= 0.1;
-            if(timeLeft <= 0) { takeDamage(); timeLeft = 10; /* 시간 초과 시 데미지 입고 10초 재시작 */ } 
-            else { document.getElementById('timerDisplay').innerText = `TIME ${timeLeft.toFixed(1)}`; }
+            if(timeLeft <= 0) { 
+                takeDamage(); // 시간 초과 시 데미지
+                timeLeft = 10; // 10초 긴급 충전
+            } else {
+                document.getElementById('timerDisplay').innerText = `TIME ${timeLeft.toFixed(1)}`;
+            }
         }, 100);
     }
 
     function checkAnswer(word) {
-        const correctAns = stages[currentStageIdx].targets[currentBlankIdx];
+        const data = stages[currentStageIdx];
+        const correctAns = data.targets[currentBlankIdx];
+        
         if (word.replace(/\s/g,'') === correctAns.replace(/\s/g,'')) {
             const blankEl = document.getElementById(`blank-${currentBlankIdx}`);
             blankEl.innerText = word;
             blankEl.classList.remove('active'); blankEl.classList.add('filled');
             
-            // 적 타격 이펙트
+            // 적 타격 이펙트 (반응)
             const enemy = document.getElementById('enemyAvatar');
-            enemy.style.transform = "scale(0.8) rotate(15deg)";
-            enemy.style.filter = "brightness(2) drop-shadow(0 0 20px #fff)";
-            setTimeout(() => { enemy.style.transform = ""; enemy.style.filter = "drop-shadow(0 0 10px #e74c3c)"; }, 150);
-            
+            enemy.style.transform = "scale(0.8) rotate(10deg)";
+            setTimeout(() => { enemy.style.transform = ""; }, 150);
+
             currentBlankIdx++; activateBlank(currentBlankIdx);
         } else {
-            takeDamage(); // [핵심] 오답 선택 시 HP 차감
+            takeDamage(); // 틀리면 HP 차감 및 화면 흔들림
         }
+    }
+    
+    function useFreeze() { alert("전투 중에는 시간을 멈출 수 없습니다."); }
+    function useScanner() { 
+        fetch('/use_item_ingame', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({item: 'scanner'}) })
+        .then(r=>r.json()).then(d=>{
+            if(d.success) { 
+                const ans = stages[currentStageIdx].targets[currentBlankIdx]; 
+                checkAnswer(ans); 
+            } else alert("스캐너 부족");
+        });
     }
 </script>
 {% endblock %}
