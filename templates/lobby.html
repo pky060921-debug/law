@@ -12,12 +12,21 @@
     .icon-menu-btn { background: transparent; border: none; font-size: 1.2rem; cursor: pointer; color: #fff; transition: transform 0.2s; text-decoration: none; display: flex; align-items: center; }
     .icon-menu-btn:hover { transform: scale(1.2); }
     
+    /* [신규] 우주 정복 진도 현황판 (대시보드) */
+    .dashboard-panel { 
+        position: fixed; top: 15px; left: 50%; transform: translateX(-50%); 
+        z-index: 2000; background: rgba(13, 17, 23, 0.85); padding: 10px 25px; 
+        border-radius: 15px; display: flex; flex-direction: column; gap: 5px; 
+        align-items: center; backdrop-filter: blur(5px); border: 1px solid var(--accent-cyan);
+        width: 300px; box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
+    }
+    .dash-stats { display: flex; justify-content: space-between; width: 100%; color: #fff; font-size: 0.8rem; font-family: var(--font-main); }
+    .dash-bar-bg { width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; }
+    .dash-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent-cyan), #00ff88); width: {{ prog_pct }}%; transition: width 1s ease-in-out; }
+
     /* 플로팅 정보 */
     .floating-title { position: fixed; top: 20px; left: 20px; z-index: 2000; font-family: var(--font-main); color: var(--accent-cyan); font-size: 1.4rem; font-weight: bold; text-decoration: none; text-shadow: 0 0 5px rgba(0, 243, 255, 0.5); }
-    .floating-info-panel { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 2000; background: rgba(13, 17, 23, 0.8); padding: 8px 25px; border-radius: 30px; display: flex; gap: 20px; align-items: center; justify-content: center; backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.1); white-space: nowrap; }
-    .info-item { display: flex; align-items: center; gap: 8px; color: #fff; font-size: 0.9rem; }
-    .info-val { font-weight: bold; }
-
+    
     /* 뒤로가기 버튼 */
     .back-btn-float { 
         position: fixed; top: 80px; left: 20px; 
@@ -64,6 +73,19 @@
     }
     .law-card:hover { transform: translateY(-3px); }
     
+    /* [신규] 반란군(Rebel) 시각 효과 */
+    .rebel-alert { filter: sepia(100%) hue-rotate(300deg) saturate(500%) !important; animation: pulse-red 1.5s infinite alternate !important; }
+    @keyframes pulse-red { 
+        0% { filter: drop-shadow(0 0 5px #ff0000) sepia(100%) hue-rotate(300deg) saturate(500%); }
+        100% { filter: drop-shadow(0 0 20px #ff0000) sepia(100%) hue-rotate(300deg) saturate(500%); }
+    }
+    .rebel-badge { 
+        position: absolute; top: -5px; right: 20px; background: #ff0000; color: #fff; 
+        font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; 
+        z-index: 10; border: 1px solid #fff; animation: blink 0.8s infinite;
+    }
+    @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+
     .planet-img-small { width: 50px; height: 50px; object-fit: contain; margin-bottom: 5px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.1)); }
     .grayscale { filter: grayscale(100%) brightness(0.6); opacity: 0.6; }
     
@@ -74,19 +96,19 @@
     }
     .card-title { color: #fff; font-size: 0.85rem; word-break: keep-all; line-height: 1.3; pointer-events: none; }
     
-    /* [수정] 연결선 스타일 (회색) */
+    /* 연결선 스타일 */
     .tree-connector {
         position: relative; width: 100%; height: 100%;
         display: flex; justify-content: center;
     }
     .tree-line-v {
         position: absolute; top: -20px; bottom: 0; left: 50%; width: 2px;
-        background: #999; /* 회색 */
+        background: #999;
         transform: translateX(-50%); z-index: 1;
     }
     .tree-line-h {
         position: absolute; top: 50%; left: 50%; width: 50%; height: 2px;
-        background: #999; /* 회색 */
+        background: #999;
         z-index: 1;
     }
     .tree-dot {
@@ -104,6 +126,7 @@
     .close-btn { background: #333; color: #fff; margin-top: 10px; }
 
     @media (max-width: 768px) {
+        .dashboard-panel { width: 220px; padding: 5px 15px; }
         .galaxy-grid-view { grid-template-columns: repeat(2, 1fr); padding-top: 150px; gap: 15px; }
         .system-grid-view { padding: 140px 15px 60px 15px; gap: 0; }
         .law-row { display: flex; flex-direction: column; align-items: center; gap: 15px; padding-bottom: 30px; position:relative;}
@@ -114,10 +137,15 @@
 </style>
 
 <a href="/lobby" class="floating-title">BLANK DIMENSION</a>
-<div class="floating-info-panel">
-    <div class="info-item"><span class="info-label">RANK</span><span class="info-val" style="color:var(--accent-gold);">LV.{{ user.level }}</span></div>
-    <div class="info-item"><span class="info-label">NAME</span><span class="info-val" style="color:#fff;">{{ user.nickname }}</span></div>
-    <div class="info-item"><span class="info-label">RES</span><span class="info-val" id="userPts" style="color:var(--accent-cyan);">{{ user.points }}</span></div>
+
+<div class="dashboard-panel">
+    <div class="dash-stats">
+        <span style="color:var(--accent-gold);">RANK LV.{{ user.level }}</span>
+        <span>점령지: {{ cleared_p }} / {{ total_p }}</span>
+    </div>
+    <div class="dash-bar-bg">
+        <div class="dash-bar-fill"></div>
+    </div>
 </div>
 
 <div class="icon-menu-bar">
@@ -161,8 +189,11 @@
                              data-name="{{ row.triplet[0].name }}" 
                              data-dispname="{{ row.triplet[0].disp_name }}" 
                              data-level="{{ row.triplet[0].level }}" 
+                             data-rebel="{{ 'true' if row.triplet[0].is_rebel else 'false' }}"
                              onclick="warp(this)">
-                            <img src="{{ url_for('static', filename='images/planet' ~ ((row.triplet[0].level % 20) + 1) ~ '.png') }}" class="planet-img-small {% if row.triplet[0].level == 0 %}grayscale{% endif %}">
+                            {% if row.triplet[0].is_rebel %}<div class="rebel-badge">반란!</div>{% endif %}
+                            <img src="{{ url_for('static', filename='images/planet' ~ ((row.triplet[0].level % 20) + 1) ~ '.png') }}" 
+                                 class="planet-img-small {% if row.triplet[0].level == 0 %}grayscale{% elif row.triplet[0].is_rebel %}rebel-alert{% endif %}">
                             <div class="card-info">
                                 <span class="card-title">{{ row.triplet[0].disp_name }}</span>
                             </div>
@@ -179,8 +210,11 @@
                              data-name="{{ item.name }}" 
                              data-dispname="{{ item.disp_name }}" 
                              data-level="{{ item.level }}" 
+                             data-rebel="{{ 'true' if item.is_rebel else 'false' }}"
                              onclick="warp(this)">
-                            <img src="{{ url_for('static', filename='images/planet' ~ ((item.level % 20) + 1) ~ '.png') }}" class="planet-img-small {% if item.level == 0 %}grayscale{% endif %}">
+                            {% if item.is_rebel %}<div class="rebel-badge">반란!</div>{% endif %}
+                            <img src="{{ url_for('static', filename='images/planet' ~ ((item.level % 20) + 1) ~ '.png') }}" 
+                                 class="planet-img-small {% if item.level == 0 %}grayscale{% elif item.is_rebel %}rebel-alert{% endif %}">
                             <div class="card-info"><span class="card-title">{{ item.disp_name }}</span></div>
                         </div>
                         {% endfor %}
@@ -194,8 +228,11 @@
                              data-name="{{ item.name }}" 
                              data-dispname="{{ item.disp_name }}" 
                              data-level="{{ item.level }}" 
+                             data-rebel="{{ 'true' if item.is_rebel else 'false' }}"
                              onclick="warp(this)">
-                            <img src="{{ url_for('static', filename='images/planet' ~ ((item.level % 20) + 1) ~ '.png') }}" class="planet-img-small {% if item.level == 0 %}grayscale{% endif %}">
+                            {% if item.is_rebel %}<div class="rebel-badge">반란!</div>{% endif %}
+                            <img src="{{ url_for('static', filename='images/planet' ~ ((item.level % 20) + 1) ~ '.png') }}" 
+                                 class="planet-img-small {% if item.level == 0 %}grayscale{% elif item.is_rebel %}rebel-alert{% endif %}">
                             <div class="card-info"><span class="card-title">{{ item.disp_name }}</span></div>
                         </div>
                         {% endfor %}
@@ -208,8 +245,9 @@
     </div>
 {% endif %}
 
-<div id="shopModal" class="modal-overlay" onclick="if(event.target==this)this.style.display='none'"><div class="shop-box"><h2 style="color:#ffd700;">🛠️ 상점</h2><div class="shop-item"><span>❄️ 시간 정지</span><button class="buy-btn" onclick="buyItem('freeze', 100)">100 P</button></div><div class="shop-item"><span>📡 힌트</span><button class="buy-btn" onclick="buyItem('scanner', 200)">200 P</button></div><button onclick="document.getElementById('shopModal').style.display='none'" style="margin-top:20px; background:#444; color:#fff; border:none; padding:8px 20px; cursor:pointer;">닫기</button></div></div>
-<div id="actModal" class="modal-overlay" onclick="if(event.target==this)this.style.display='none'"><div class="modal-box"><h3 id="mTitle" style="color:var(--accent-cyan); font-size:1.5rem; margin-bottom:10px;"></h3><p style="color:#ccc; margin-bottom:20px;">이 구역을 공략하시겠습니까?</p><form action="/game_start" method="POST" class="modal-btn-group"><input type="hidden" name="quest_name" id="mQName"><input type="hidden" name="action" id="mAction"><button type="submit" id="mBtn" class="pixel-btn">정복하기</button><button type="button" class="pixel-btn close-btn" onclick="document.getElementById('actModal').style.display='none'">취소</button></form></div></div>
+<div id="shopModal" class="modal-overlay" onclick="if(event.target==this)this.style.display='none'"><div class="modal-box"><h2 style="color:#ffd700;">🛠️ 상점</h2><div class="shop-item"><span>❄️ 시간 정지</span><button class="buy-btn" onclick="buyItem('freeze', 100)">100 P</button></div><div class="shop-item"><span>📡 힌트</span><button class="buy-btn" onclick="buyItem('scanner', 200)">200 P</button></div><button onclick="document.getElementById('shopModal').style.display='none'" style="margin-top:20px; background:#444; color:#fff; border:none; padding:8px 20px; cursor:pointer;">닫기</button></div></div>
+<div id="actModal" class="modal-overlay" onclick="if(event.target==this)this.style.display='none'"><div class="modal-box"><h3 id="mTitle" style="color:var(--accent-cyan); font-size:1.5rem; margin-bottom:10px;"></h3><p id="mDesc" style="color:#ccc; margin-bottom:20px;"></p><form action="/game_start" method="POST" class="modal-btn-group"><input type="hidden" name="quest_name" id="mQName"><input type="hidden" name="action" id="mAction"><button type="submit" id="mBtn" class="pixel-btn"></button><button type="button" class="pixel-btn close-btn" onclick="document.getElementById('actModal').style.display='none'">취소</button></form></div></div>
+
 <script>
     function openShop() { document.getElementById('shopModal').style.display = 'flex'; }
     function buyItem(item, cost) { if(!confirm(item + " 구매하시겠습니까?")) return; fetch('/buy_item', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: `item=${item}&cost=${cost}` }).then(r=>r.json()).then(d => { alert(d.msg); if(d.success) location.reload(); }); }
@@ -217,19 +255,33 @@
         const qName = element.getAttribute('data-name');
         const dispName = element.getAttribute('data-dispname');
         const level = parseInt(element.getAttribute('data-level'));
+        const isRebel = element.getAttribute('data-rebel') === 'true';
+        
         document.getElementById('mTitle').innerText = dispName;
         document.getElementById('mQName').value = qName;
-        if (level > 0) {
+        
+        if (isRebel) {
+            document.getElementById('mDesc').innerText = "🚨 경고! AI 반란군이 점령 중입니다. 즉시 진압하시겠습니까?";
+            document.getElementById('mAction').value = 'terraform';
+            document.getElementById('mBtn').innerText = "⚔️ 반란 진압 개시";
+            document.getElementById('mBtn').style.background = "#ff0000";
+            document.getElementById('mBtn').style.color = "#fff";
+        } else if (level > 0) {
+            document.getElementById('mDesc').innerText = "이 행성은 점령 중입니다. 방어를 강화하시겠습니까?";
             document.getElementById('mAction').value = 'develop';
             document.getElementById('mBtn').innerText = "✨ 발전하기 (복습)";
+            document.getElementById('mBtn').style.background = "var(--accent-cyan)";
+            document.getElementById('mBtn').style.color = "#000";
         } else {
+            document.getElementById('mDesc').innerText = "미지의 구역입니다. 점령하시겠습니까?";
             document.getElementById('mAction').value = 'terraform';
-            document.getElementById('mBtn').innerText = "⚔️ 정복하기";
+            document.getElementById('mBtn').innerText = "🚀 정복 개시";
+            document.getElementById('mBtn').style.background = "var(--accent-cyan)";
+            document.getElementById('mBtn').style.color = "#000";
         }
         document.getElementById('actModal').style.display = 'flex';
     }
     
-    // [신규] 텍스트 길이 자동 조절
     function fitTitleText() {
         const titles = document.querySelectorAll('.chapter-title-text');
         titles.forEach(el => {
