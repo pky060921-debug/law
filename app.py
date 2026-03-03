@@ -209,7 +209,7 @@ def get_similar_distractors(target, count=4):
     
     return distractors
 
-def auto_generate_blanks(text, limit=4):
+def auto_generate_blanks(text, limit=20):
     """
     텍스트에 자동으로 빈칸 생성
     우선순위: 위에서 정의된 긴 구절(Killers) -> 단일 명사
