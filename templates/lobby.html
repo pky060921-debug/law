@@ -12,7 +12,7 @@
     .icon-menu-btn { background: transparent; border: none; font-size: 1.2rem; cursor: pointer; color: #fff; transition: transform 0.2s; text-decoration: none; display: flex; align-items: center; }
     .icon-menu-btn:hover { transform: scale(1.2); }
     
-    /* [신규] 우주 정복 진도 현황판 (대시보드) */
+    /* 우주 정복 진도 현황판 (대시보드) */
     .dashboard-panel { 
         position: fixed; top: 15px; left: 50%; transform: translateX(-50%); 
         z-index: 2000; background: rgba(13, 17, 23, 0.85); padding: 10px 25px; 
@@ -63,17 +63,16 @@
         gap: 0; 
         max-width: 1200px; margin: 0 auto; min-height: 100vh; 
     }
-    .law-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; align-items: stretch; position: relative; padding-bottom: 20px; }
 
     .law-card { 
         background: transparent; border: none; padding: 5px; 
         cursor: pointer; transition: 0.2s; text-align: center; 
         display: flex; flex-direction: column; align-items: center; justify-content: center;
-        width: 100%; position: relative; z-index: 2;
+        position: relative; z-index: 2;
     }
     .law-card:hover { transform: translateY(-3px); }
     
-    /* [신규] 반란군(Rebel) 시각 효과 */
+    /* 반란군(Rebel) 시각 효과 */
     .rebel-alert { filter: sepia(100%) hue-rotate(300deg) saturate(500%) !important; animation: pulse-red 1.5s infinite alternate !important; }
     @keyframes pulse-red { 
         0% { filter: drop-shadow(0 0 5px #ff0000) sepia(100%) hue-rotate(300deg) saturate(500%); }
@@ -103,13 +102,11 @@
     }
     .tree-line-v {
         position: absolute; top: -20px; bottom: 0; left: 50%; width: 2px;
-        background: #999;
-        transform: translateX(-50%); z-index: 1;
+        background: #999; transform: translateX(-50%); z-index: 1;
     }
     .tree-line-h {
         position: absolute; top: 50%; left: 50%; width: 50%; height: 2px;
-        background: #999;
-        z-index: 1;
+        background: #999; z-index: 1;
     }
     .tree-dot {
         position: absolute; top: 50%; left: 50%; width: 8px; height: 8px;
@@ -125,14 +122,41 @@
     .pixel-btn { background: var(--accent-cyan); color: #000; border: none; padding: 15px; font-size: 1.1rem; font-weight: bold; cursor: pointer; border-radius: 8px; transition: 0.2s; }
     .close-btn { background: #333; color: #fff; margin-top: 10px; }
 
-    @media (max-width: 768px) {
+    /* =========================================
+       태블릿 및 PC 전용 최적화 (768px 이상)
+       ========================================= */
+    @media (min-width: 768px) {
+        .law-row {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr 1fr !important;
+            gap: 15px !important;
+            align-items: stretch !important;
+            position: relative; 
+            padding-bottom: 20px;
+        }
+        .law-card { width: 100% !important; }
+        .tree-connector { display: flex !important; }
+    }
+
+    /* =========================================
+       스마트폰 전용 (767px 이하)
+       ========================================= */
+    @media (max-width: 767px) {
         .dashboard-panel { width: 220px; padding: 5px 15px; }
         .galaxy-grid-view { grid-template-columns: repeat(2, 1fr); padding-top: 150px; gap: 15px; }
         .system-grid-view { padding: 140px 15px 60px 15px; gap: 0; }
-        .law-row { display: flex; flex-direction: column; align-items: center; gap: 15px; padding-bottom: 30px; position:relative;}
+        .law-row { 
+            display: flex !important; 
+            flex-direction: column !important; 
+            align-items: center !important; 
+            gap: 15px !important; 
+            padding-bottom: 30px !important; 
+            position: relative !important;
+        }
         .chapter-indicator { width: 120px; height: 120px; font-size: 0.9rem; padding-right: 15px; padding-bottom: 15px; }
-        .tree-line-v, .tree-line-h, .tree-dot { display: none; }
+        .tree-line-v, .tree-line-h, .tree-dot { display: none !important; }
         .chapter-item { width: 100%; }
+        .law-card { width: 100% !important; }
     }
 </style>
 
@@ -245,12 +269,46 @@
     </div>
 {% endif %}
 
-<div id="shopModal" class="modal-overlay" onclick="if(event.target==this)this.style.display='none'"><div class="modal-box"><h2 style="color:#ffd700;">🛠️ 상점</h2><div class="shop-item"><span>❄️ 시간 정지</span><button class="buy-btn" onclick="buyItem('freeze', 100)">100 P</button></div><div class="shop-item"><span>📡 힌트</span><button class="buy-btn" onclick="buyItem('scanner', 200)">200 P</button></div><button onclick="document.getElementById('shopModal').style.display='none'" style="margin-top:20px; background:#444; color:#fff; border:none; padding:8px 20px; cursor:pointer;">닫기</button></div></div>
-<div id="actModal" class="modal-overlay" onclick="if(event.target==this)this.style.display='none'"><div class="modal-box"><h3 id="mTitle" style="color:var(--accent-cyan); font-size:1.5rem; margin-bottom:10px;"></h3><p id="mDesc" style="color:#ccc; margin-bottom:20px;"></p><form action="/game_start" method="POST" class="modal-btn-group"><input type="hidden" name="quest_name" id="mQName"><input type="hidden" name="action" id="mAction"><button type="submit" id="mBtn" class="pixel-btn"></button><button type="button" class="pixel-btn close-btn" onclick="document.getElementById('actModal').style.display='none'">취소</button></form></div></div>
+<div id="shopModal" class="modal-overlay" onclick="if(event.target==this)this.style.display='none'">
+    <div class="modal-box">
+        <h2 style="color:#ffd700;">🛠️ 상점</h2>
+        <div class="shop-item" style="margin-bottom:10px;">
+            <button class="pixel-btn" onclick="buyItem('freeze', 100)">❄️ 시간 정지 (100 P)</button>
+        </div>
+        <div class="shop-item">
+            <button class="pixel-btn" onclick="buyItem('scanner', 200)">📡 힌트 (200 P)</button>
+        </div>
+        <button onclick="document.getElementById('shopModal').style.display='none'" class="pixel-btn close-btn">닫기</button>
+    </div>
+</div>
+
+<div id="actModal" class="modal-overlay" onclick="if(event.target==this)this.style.display='none'">
+    <div class="modal-box">
+        <h3 id="mTitle" style="color:var(--accent-cyan); font-size:1.5rem; margin-bottom:10px;"></h3>
+        <p id="mDesc" style="color:#ccc; margin-bottom:20px;"></p>
+        <form action="/game_start" method="POST" class="modal-btn-group">
+            <input type="hidden" name="quest_name" id="mQName">
+            <input type="hidden" name="action" id="mAction">
+            <button type="submit" id="mBtn" class="pixel-btn"></button>
+            <button type="button" class="pixel-btn close-btn" onclick="document.getElementById('actModal').style.display='none'">취소</button>
+        </form>
+    </div>
+</div>
 
 <script>
     function openShop() { document.getElementById('shopModal').style.display = 'flex'; }
-    function buyItem(item, cost) { if(!confirm(item + " 구매하시겠습니까?")) return; fetch('/buy_item', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: `item=${item}&cost=${cost}` }).then(r=>r.json()).then(d => { alert(d.msg); if(d.success) location.reload(); }); }
+    function buyItem(item, cost) { 
+        if(!confirm(item + " 구매하시겠습니까?")) return; 
+        fetch('/buy_item', { 
+            method: 'POST', 
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'}, 
+            body: `item=${item}&cost=${cost}` 
+        }).then(r=>r.json()).then(d => { 
+            alert(d.msg); 
+            if(d.success) location.reload(); 
+        }); 
+    }
+    
     function warp(element) {
         const qName = element.getAttribute('data-name');
         const dispName = element.getAttribute('data-dispname');
