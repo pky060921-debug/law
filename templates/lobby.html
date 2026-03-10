@@ -12,7 +12,7 @@
     .icon-menu-btn { background: transparent; border: none; font-size: 1.2rem; cursor: pointer; color: #fff; transition: transform 0.2s; text-decoration: none; display: flex; align-items: center; }
     .icon-menu-btn:hover { transform: scale(1.2); }
     
-    /* 우주 정복 진도 현황판 (대시보드) */
+    /* 우주 정복 진도 현황판 (전체 대시보드) */
     .dashboard-panel { 
         position: fixed; top: 15px; left: 50%; transform: translateX(-50%); 
         z-index: 2000; background: rgba(13, 17, 23, 0.85); padding: 10px 25px; 
@@ -50,70 +50,89 @@
         clip-path: circle(100% at 0 0);
     }
 
-    /* 그리드 뷰 (은하) */
-    .galaxy-grid-view { padding: 150px 20px 60px 20px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 30px; max-width: 1200px; margin: 0 auto; justify-items: center; }
-    .chapter-item { display: flex; flex-direction: column; align-items: center; cursor: pointer; transition: transform 0.3s; width: 140px; }
-    .chapter-img { width: 100px; height: 100px; border-radius: 50%; object-fit: cover; margin-bottom: 10px; box-shadow: 0 0 20px rgba(0, 243, 255, 0.3); }
-    .chapter-title-text { font-weight: bold; color: #fff; font-size: 1rem; text-align: center; white-space: nowrap; width: 100%; display: block; padding: 0 5px; box-sizing: border-box; }
+    /* =========================================
+       [신규] 그리드 뷰 (은하 목록)
+       ========================================= */
+    .galaxy-grid-view { 
+        padding: 150px 20px 60px 20px; 
+        display: grid; 
+        grid-template-columns: repeat(4, 1fr); /* 1줄에 4개 배치 */
+        gap: 20px; 
+        max-width: 1200px; 
+        margin: 0 auto; 
+    }
+    .chapter-item { 
+        display: flex; 
+        flex-direction: row; /* 좌우 배치: 이미지(좌), 텍스트/바(우) */
+        align-items: center; 
+        cursor: pointer; 
+        transition: transform 0.3s, box-shadow 0.3s, background 0.3s; 
+        width: 100%; 
+        background: rgba(255, 255, 255, 0.05); /* 반투명 카드 박스 */
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 12px;
+        box-sizing: border-box;
+    }
+    .chapter-item:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 20px rgba(0, 243, 255, 0.2);
+        background: rgba(255, 255, 255, 0.1);
+    }
+    .chapter-img { 
+        width: 65px; height: 65px; 
+        border-radius: 50%; object-fit: cover; 
+        margin-right: 15px; 
+        flex-shrink: 0;
+        filter: drop-shadow(0 0 10px rgba(255,255,255,0.3));
+    }
+    .chapter-info-box {
+        display: flex; flex-direction: column; flex-grow: 1; overflow: hidden;
+    }
+    .chapter-title-text { 
+        font-weight: bold; color: #fff; font-size: 1rem; 
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; 
+        margin-bottom: 6px;
+    }
+    .chapter-progress-text {
+        font-size: 0.75rem; color: #bbb; text-align: right; margin-bottom: 3px;
+    }
+    .chapter-progress-bg {
+        width: 100%; height: 6px; background: rgba(0,0,0,0.6); border-radius: 3px; overflow: hidden;
+    }
+    .chapter-progress-fill {
+        height: 100%; background: linear-gradient(90deg, #ff9800, #ffeb3b);
+    }
 
     /* 시스템 뷰 (리스트) */
     .system-grid-view { 
         padding: 120px 40px 100px 40px; 
-        display: flex; flex-direction: column; 
-        gap: 0; 
-        max-width: 1200px; margin: 0 auto; min-height: 100vh; 
+        display: flex; flex-direction: column; gap: 0; max-width: 1200px; margin: 0 auto; min-height: 100vh; 
     }
 
     .law-card { 
-        background: transparent; border: none; padding: 5px; 
-        cursor: pointer; transition: 0.2s; text-align: center; 
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
-        position: relative; z-index: 2;
+        background: transparent; border: none; padding: 5px; cursor: pointer; transition: 0.2s; text-align: center; 
+        display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; z-index: 2;
     }
     .law-card:hover { transform: translateY(-3px); }
     
     /* 반란군(Rebel) 시각 효과 */
     .rebel-alert { filter: sepia(100%) hue-rotate(300deg) saturate(500%) !important; animation: pulse-red 1.5s infinite alternate !important; }
-    @keyframes pulse-red { 
-        0% { filter: drop-shadow(0 0 5px #ff0000) sepia(100%) hue-rotate(300deg) saturate(500%); }
-        100% { filter: drop-shadow(0 0 20px #ff0000) sepia(100%) hue-rotate(300deg) saturate(500%); }
-    }
-    .rebel-badge { 
-        position: absolute; top: -5px; right: 20px; background: #ff0000; color: #fff; 
-        font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; 
-        z-index: 10; border: 1px solid #fff; animation: blink 0.8s infinite;
-    }
+    @keyframes pulse-red { 0% { filter: drop-shadow(0 0 5px #ff0000) sepia(100%) hue-rotate(300deg) saturate(500%); } 100% { filter: drop-shadow(0 0 20px #ff0000) sepia(100%) hue-rotate(300deg) saturate(500%); } }
+    .rebel-badge { position: absolute; top: -5px; right: 20px; background: #ff0000; color: #fff; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; z-index: 10; border: 1px solid #fff; animation: blink 0.8s infinite; }
     @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
 
     .planet-img-small { width: 50px; height: 50px; object-fit: contain; margin-bottom: 5px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.1)); }
     .grayscale { filter: grayscale(100%) brightness(0.6); opacity: 0.6; }
     
-    .card-info { 
-        display: flex; flex-direction: column; align-items: center; gap: 2px; 
-        background: rgba(13, 17, 23, 0.9); padding: 5px 10px; 
-        border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); min-width: 100px; 
-    }
+    .card-info { display: flex; flex-direction: column; align-items: center; gap: 2px; background: rgba(13, 17, 23, 0.9); padding: 5px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); min-width: 100px; }
     .card-title { color: #fff; font-size: 0.85rem; word-break: keep-all; line-height: 1.3; pointer-events: none; }
     
     /* 연결선 스타일 */
-    .tree-connector {
-        position: relative; width: 100%; height: 100%;
-        display: flex; justify-content: center;
-    }
-    .tree-line-v {
-        position: absolute; top: -20px; bottom: 0; left: 50%; width: 2px;
-        background: #999; transform: translateX(-50%); z-index: 1;
-    }
-    .tree-line-h {
-        position: absolute; top: 50%; left: 50%; width: 50%; height: 2px;
-        background: #999; z-index: 1;
-    }
-    .tree-dot {
-        position: absolute; top: 50%; left: 50%; width: 8px; height: 8px;
-        background: var(--accent-cyan); border-radius: 50%;
-        transform: translate(-50%, -50%); z-index: 2;
-        box-shadow: 0 0 5px var(--accent-cyan);
-    }
+    .tree-connector { position: relative; width: 100%; height: 100%; display: flex; justify-content: center; }
+    .tree-line-v { position: absolute; top: -20px; bottom: 0; left: 50%; width: 2px; background: #999; transform: translateX(-50%); z-index: 1; }
+    .tree-line-h { position: absolute; top: 50%; left: 50%; width: 50%; height: 2px; background: #999; z-index: 1; }
+    .tree-dot { position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; background: var(--accent-cyan); border-radius: 50%; transform: translate(-50%, -50%); z-index: 2; box-shadow: 0 0 5px var(--accent-cyan); }
 
     /* 모달 */
     .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
@@ -143,19 +162,11 @@
        ========================================= */
     @media (max-width: 767px) {
         .dashboard-panel { width: 220px; padding: 5px 15px; }
-        .galaxy-grid-view { grid-template-columns: repeat(2, 1fr); padding-top: 150px; gap: 15px; }
+        .galaxy-grid-view { grid-template-columns: 1fr; padding-top: 150px; gap: 15px; } /* 모바일에서는 1줄로 배치 */
         .system-grid-view { padding: 140px 15px 60px 15px; gap: 0; }
-        .law-row { 
-            display: flex !important; 
-            flex-direction: column !important; 
-            align-items: center !important; 
-            gap: 15px !important; 
-            padding-bottom: 30px !important; 
-            position: relative !important;
-        }
+        .law-row { display: flex !important; flex-direction: column !important; align-items: center !important; gap: 15px !important; padding-bottom: 30px !important; position: relative !important; }
         .chapter-indicator { width: 120px; height: 120px; font-size: 0.9rem; padding-right: 15px; padding-bottom: 15px; }
         .tree-line-v, .tree-line-h, .tree-dot { display: none !important; }
-        .chapter-item { width: 100%; }
         .law-card { width: 100% !important; }
     }
 </style>
@@ -165,7 +176,7 @@
 <div class="dashboard-panel">
     <div class="dash-stats">
         <span style="color:var(--accent-gold);">RANK LV.{{ user.level }}</span>
-        <span>점령지: {{ cleared_p }} / {{ total_p }}</span>
+        <span>전체 점령: {{ cleared_p }} / {{ total_p }}</span>
     </div>
     <div class="dash-bar-bg">
         <div class="dash-bar-fill"></div>
@@ -185,10 +196,38 @@
     <div class="universe-viewport">
         <div class="galaxy-grid-view">
             {% for zone in zones %}
+            
+            {% set ns = namespace(total=0, cleared=0) %}
+            {% if zone.rows %}
+                {% for row_key, row_val in zone.rows.items() %}
+                    {% if row_val[0] %}
+                        {% set ns.total = ns.total + 1 %}
+                        {% if row_val[0].level > 0 %}{% set ns.cleared = ns.cleared + 1 %}{% endif %}
+                    {% endif %}
+                    {% for item in row_val[1] %}
+                        {% set ns.total = ns.total + 1 %}
+                        {% if item.level > 0 %}{% set ns.cleared = ns.cleared + 1 %}{% endif %}
+                    {% endfor %}
+                    {% for item in row_val[2] %}
+                        {% set ns.total = ns.total + 1 %}
+                        {% if item.level > 0 %}{% set ns.cleared = ns.cleared + 1 %}{% endif %}
+                    {% endfor %}
+                {% endfor %}
+            {% endif %}
+            {% set zone_percent = (ns.cleared / ns.total * 100)|int if ns.total > 0 else 0 %}
+            
             <div class="chapter-item" onclick="location.href='/lobby?chapter={{ zone.title }}'">
-                {% set nebula_idx = ((zone.id - 1) % 16) + 1 %}
-                <img src="{{ url_for('static', filename='images/nebula' ~ nebula_idx ~ '.png') }}" alt="은하" class="chapter-img">
-                <div class="chapter-title-text">{{ zone.title }}</div>
+                {% set planet_idx = ((zone.id - 1) % 20) + 1 %}
+                {% set hue_val = (zone.id * 55) % 360 %}
+                <img src="{{ url_for('static', filename='images/planet' ~ planet_idx ~ '.png') }}" class="chapter-img" style="filter: hue-rotate({{ hue_val }}deg) saturate(1.5);">
+                
+                <div class="chapter-info-box">
+                    <div class="chapter-title-text">{{ zone.title }}</div>
+                    <div class="chapter-progress-text">{{ ns.cleared }} / {{ ns.total }} 정복 완료</div>
+                    <div class="chapter-progress-bg">
+                        <div class="chapter-progress-fill" style="width: {{ zone_percent }}%; background: linear-gradient(90deg, hsl({{ hue_val }}, 80%, 60%), hsl({{ hue_val + 30 }}, 100%, 70%));"></div>
+                    </div>
+                </div>
             </div>
             {% endfor %}
         </div>
@@ -327,32 +366,3 @@
         } else if (level > 0) {
             document.getElementById('mDesc').innerText = "이 행성은 점령 중입니다. 방어를 강화하시겠습니까?";
             document.getElementById('mAction').value = 'develop';
-            document.getElementById('mBtn').innerText = "✨ 발전하기 (복습)";
-            document.getElementById('mBtn').style.background = "var(--accent-cyan)";
-            document.getElementById('mBtn').style.color = "#000";
-        } else {
-            document.getElementById('mDesc').innerText = "미지의 구역입니다. 점령하시겠습니까?";
-            document.getElementById('mAction').value = 'terraform';
-            document.getElementById('mBtn').innerText = "🚀 정복 개시";
-            document.getElementById('mBtn').style.background = "var(--accent-cyan)";
-            document.getElementById('mBtn').style.color = "#000";
-        }
-        document.getElementById('actModal').style.display = 'flex';
-    }
-    
-    function fitTitleText() {
-        const titles = document.querySelectorAll('.chapter-title-text');
-        titles.forEach(el => {
-            el.style.fontSize = '1rem';
-            const containerW = el.parentElement.clientWidth;
-            const textW = el.scrollWidth;
-            if (textW > containerW) {
-                const newSize = (containerW / textW) * 0.9;
-                el.style.fontSize = `${Math.max(newSize, 0.5)}rem`;
-            }
-        });
-    }
-    window.addEventListener('load', fitTitleText);
-    window.addEventListener('resize', fitTitleText);
-</script>
-{% endblock %}
