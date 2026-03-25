@@ -366,3 +366,19 @@
         } else if (level > 0) {
             document.getElementById('mDesc').innerText = "이 행성은 점령 중입니다. 방어를 강화하시겠습니까?";
             document.getElementById('mAction').value = 'develop';
+            document.getElementById('mBtn').innerText = "🏰 방어 강화";
+            document.getElementById('mBtn').style.background = "#ffd700";
+            document.getElementById('mBtn').style.color = "#000";
+        } else {
+            document.getElementById('mDesc').innerText = "미개척지입니다. 워프하여 점령을 시작하시겠습니까?";
+            document.getElementById('mAction').value = 'explore';
+            document.getElementById('mBtn').innerText = "🚀 워프 개시";
+            document.getElementById('mBtn').style.background = "var(--accent-cyan)";
+            document.getElementById('mBtn').style.color = "#000";
+        }
+
+        document.getElementById('actModal').style.display = 'flex';
+    }
+</script>
+
+{% endblock %}
