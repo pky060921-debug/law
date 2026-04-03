@@ -5,6 +5,7 @@ import datetime
 import re
 import html 
 import time
+import sqlite3  # SQLite 연동을 위해 추가된 모듈
 from datetime import timedelta
 from itertools import zip_longest
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
@@ -19,7 +20,7 @@ import sys
 app = Flask(__name__)
 # 세션 보안키 및 영구 세션 설정 (31일)
 app.secret_key = os.environ.get('SECRET_KEY', 'law_game_ultimate_fixed_v3_2')
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=31)
+app.config = timedelta(days=31)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 @app.errorhandler(Exception)
@@ -29,8 +30,8 @@ def handle_exception(e):
     return f"<pre>{traceback.format_exc()}</pre>", 500
 
 # OAuth 설정
-app.config['GOOGLE_CLIENT_ID'] = os.environ.get('GOOGLE_CLIENT_ID')
-app.config['GOOGLE_CLIENT_SECRET'] = os.environ.get('GOOGLE_CLIENT_SECRET')
+app.config = os.environ.get('GOOGLE_CLIENT_ID')
+app.config = os.environ.get('GOOGLE_CLIENT_SECRET')
 
 oauth = OAuth(app)
 google_auth = oauth.register(
@@ -47,10 +48,10 @@ def natural_sort_key(text):
 
 def extract_candidates(text):
     """
-    [BLANK DIMENSION V4 - 33가지 심화 출제 규칙 적용]
+   
     단순 단어가 아닌 법적 의미가 변하는 '구(Phrase)' 단위로 빈칸을 추출합니다.
     """
-    candidates = []
+    candidates =
     
     # 1. 조문 제목 (괄호 안 내용)
     titles = re.findall(r'\(([^)]+)\)', text)
@@ -60,16 +61,16 @@ def extract_candidates(text):
 
     # 2. 33가지 특수 킬러 패턴 정규식 추출
     complex_patterns = [
-        r'(?:즉시|특별한|1건당|특히|모든|최초로|미리|지체\s*없이)\s+[가-힣]+', # 부사+명사 함정
+        r'(?:즉시|특별한|1건당|특히|모든|최초로|미리|지체\s*없이)\s+[가-힣]+',
         r'(?:대통령령|보건복지부령|공단|공단의 이사장|보건복지부장관|정관|심사평가원장|심사평가원의 정관)(?:으로|이)\s*정(?:한다|하여 고시한다)',
         r'[가-힣\s]*위원회',
-        r'\d+(?:일|개월|년)\s*이내|\d+개월의\s*범위', # 기간
+        r'\d+(?:일|개월|년)\s*이내|\d+개월의\s*범위',
         r'(?:보건복지부장관|장관)이\s*정하는(?: 바에 따라)?',
         r'(?:보건복지부장관|공단)의\s*승인',
         r'협의|합의',
         r'노동조합|근로자단체',
         r'형법 제\d+조(?:부터 제\d+조까지)?',
-        r'[가-힣]{2,4}(?:할\s*수\s*있다|하여야\s*한다|해야\s*한다|한다|된다)', # 서술어 함정
+        r'[가-힣]{2,4}(?:할\s*수\s*있다|하여야\s*한다|해야\s*한다|한다|된다)',
         r'(?:공단|정관|공단의\s*정관)이\s*정하는\s*(?:바|기간|가액|금액)|공단이\s*(?:지정하는|인정하는)',
         r'공단의\s*이사장|공단',
         r'재해|천재지변',
@@ -84,7 +85,7 @@ def extract_candidates(text):
         r'이의신청|심판청구|행정소송',
         r'[가-힣]+로\s*(?:이용|누설|활용|제공)',
         r'연구기관|전문단체|비영리법인|전문가|단체|법인|대학',
-        r'(?:1천|1천500|3천|6천|1만|100)분의\s*\d+', # 비율
+        r'(?:1천|1천500|3천|6천|1만|100)분의\s*\d+',
         r'속하는\s*달의\s*다음달|속하는\s*달|인상된\s*달|인하된\s*달|변동된\s*달|전\s*달|그달',
         r'(?:해당(?:되는|하게 된)\s*날|그\s*날|된\s*날|자격이\s*변동된\s*날|사유가\s*발생한\s*날|자격을\s*잃은\s*날|변경된\s*날|결정을\s*한\s*날|접수한\s*날|지난\s*날|해지한\s*날|사유가\s*생긴\s*날|부과된\s*날|기한이\s*지난\s*날|기한의\s*다음날|처분이\s*있은\s*날|안\s*날|통보받은\s*날|끝난\s*날|취득한\s*날|고시하는\s*날|전출된\s*날|전출한\s*날|통지를\s*받은\s*날|지급보류한\s*날|지급하는\s*날|확인한\s*날|발생한\s*날|받은\s*날|제출된\s*날|발급하는\s*날|신청을\s*받은\s*날|따른\s*날|납부하는\s*날까지)',
         r'(?:서면|문서)으로\s*(?:통보|통지|알려야)|서면통지',
@@ -129,14 +130,14 @@ def get_similar_distractors(target, count=4):
     if m1:
         bw = m1.group(2)
         pool = [bw, f"미리 {bw}", f"지체 없이 {bw}", f"즉시 {bw}", f"특별한 {bw}", f"모든 {bw}"]
-        pool = [p for p in pool if p.replace(" ", "") != target.replace(" ", "")]
+        pool = [p for p in pool if p.replace(" ", "")!= target.replace(" ", "")]
         return random.sample(pool, min(len(pool), count))
 
     # 규칙 2: 제정 주체 함정
     m2 = re.match(r'(대통령령|보건복지부령|공단|공단의 이사장|보건복지부장관|정관|심사평가원장|심사평가원의 정관)(으로|이)\s*정(한다|하여 고시한다)', target)
     if m2:
         pool = ["대통령령으로 정한다", "보건복지부령으로 정한다", "보건복지부장관이 정하여 고시한다", "공단이 정한다", "공단의 이사장이 정한다", "정관으로 정한다", "심사평가원의 정관으로 정한다"]
-        pool = [p for p in pool if p.replace(" ", "") != target.replace(" ", "")]
+        pool = [p for p in pool if p.replace(" ", "")!= target.replace(" ", "")]
         return random.sample(pool, min(len(pool), count))
 
     # 규칙 10: 강제성/재량성 종결어 함정 (할 수 있다 vs 해야 한다)
@@ -144,7 +145,7 @@ def get_similar_distractors(target, count=4):
     if m10:
         verb = m10.group(1)
         pool = [f"{verb}할 수 있다", f"{verb}하여야 한다", f"{verb}한다", f"{verb}되지 아니한다"]
-        pool = [p for p in pool if p.replace(" ", "") != target.replace(" ", "")]
+        pool = [p for p in pool if p.replace(" ", "")!= target.replace(" ", "")]
         return random.sample(pool, min(len(pool), count))
 
     # 하드코딩된 특수 헷갈림 단어풀 (규칙 3, 4, 6, 7, 8, 14, 15, 16 등 반영)
@@ -183,11 +184,11 @@ def get_similar_distractors(target, count=4):
     # 딕셔너리 키 매칭
     for k, v in static_map.items():
         if k in target:
-            pool = [p for p in v if p.replace(" ", "") != target.replace(" ", "")]
+            pool = [p for p in v if p.replace(" ", "")!= target.replace(" ", "")]
             if pool:
                 # 보기가 모자라면 글로벌 풀에서 비슷한 길이 단어 보충
                 if len(pool) < count:
-                    others = [w for w in GLOBAL_WORD_POOL if len(w) == len(target)]
+                    others =
                     pool += random.sample(others, min(len(others), count - len(pool)))
                 return random.sample(pool, min(len(pool), count))
 
@@ -196,11 +197,11 @@ def get_similar_distractors(target, count=4):
         return ["권한", "책임", "의무", "위반"]
         
     if any(char.isdigit() for char in target):
-        num_pool = [w for w in GLOBAL_WORD_POOL if any(c.isdigit() for c in w) and w != target]
+        num_pool =
         if len(num_pool) >= count:
             return random.sample(num_pool, count)
             
-    same_len = [w for w in GLOBAL_WORD_POOL if len(w) == len(target) and w != target]
+    same_len =
     distractors = random.sample(same_len, min(len(same_len), count))
     
     if len(distractors) < count:
@@ -251,7 +252,7 @@ def split_content_smartly(text):
     if len(text) < MAX_LEN:
         return [text]
     
-    chunks = []
+    chunks =
     paragraphs = text.split('\n')
     current_chunk = ""
     
@@ -290,10 +291,10 @@ class GoogleSheetManager:
         self.quest_log_ws = None
         self.user_quests_ws = None
         self.user_cache = {}
-        self.quest_cache = {'data': [], 'time': 0}
+        self.quest_cache = {'data':, 'time': 0}
         
         # [핵심 1] 유저 클리어 기록을 저장할 캐시 추가
-        self.collection_cache = {'data': [], 'time': 0} 
+        self.collection_cache = {'data':, 'time': 0} 
         
         self.CACHE_DURATION = 300
         
@@ -357,7 +358,7 @@ class GoogleSheetManager:
         try:
             return worksheet.get_all_records()
         except:
-            return []
+            return
 
     def get_user_by_id(self, user_id, use_cache=True):
         if use_cache and user_id in self.user_cache:
@@ -379,7 +380,7 @@ class GoogleSheetManager:
                     row['item_shield'] = int(row.get('item_shield') or 0)
                     
                     if not row.get('nickname'):
-                        row['nickname'] = str(user_id).split('@')[0]
+                        row['nickname'] = str(user_id).split('@')
                         
                     self.user_cache[user_id] = {
                         'time': time.time(),
@@ -397,7 +398,7 @@ class GoogleSheetManager:
             return False
         try:
             if user_id not in self.users_ws.col_values(1):
-                self.users_ws.append_row([user_id, "SOCIAL", 1, 0, "우주 개척자", 0, 0, user_id.split('@')[0], 0, 0, 0])
+                self.users_ws.append_row()
             return True
         except:
             return False
@@ -436,11 +437,11 @@ class GoogleSheetManager:
                 'time': time.time()
             }
             return data
-        return []
+        return
 
     def get_my_progress(self, user_id): 
         if not self.ensure_connection():
-            return []
+            return
             
         # [핵심 2] 5분 이내의 기록이 맥미니에 캐시되어 있다면 구글에 묻지 않고 바로 반환 (속도 100배 향상)
         if self.collection_cache['data'] and (time.time() - self.collection_cache['time'] < self.CACHE_DURATION):
@@ -538,13 +539,13 @@ class GoogleSheetManager:
         
         if mode == 'terraform': 
             if found_idx == -1:
-                self.collections_ws.append_row([user_id, "CLEARED", "NORMAL", today, quest_name, 1, "ACT", duration])
+                self.collections_ws.append_row()
                 return self.add_xp(user_id, 100, 50)
             else:
                 self.collections_ws.update_cell(found_idx, 4, today)
                 return self.add_xp(user_id, 50, 30)
         else: 
-            if found_idx != -1:
+            if found_idx!= -1:
                 curr_lv = int(records[found_idx-2].get('level') or 0)
                 self.collections_ws.update_cell(found_idx, 6, curr_lv + 1)
                 self.collections_ws.update_cell(found_idx, 4, today)
@@ -581,7 +582,7 @@ class GoogleSheetManager:
         try:
             today = str(datetime.date.today())
             existing = [str(r.get('quest_name')) for r in self.get_quest_list()]
-            rows_to_add = []
+            rows_to_add =
             
             file_obj.seek(0)
             raw_data = file_obj.read()
@@ -613,7 +614,7 @@ class GoogleSheetManager:
                         chap_match = re.search(r'제\s*(\d+)\s*장\s*(.*)', row_text)
                         if chap_match:
                             c_num = chap_match.group(1)
-                            c_name = re.sub(r'[^\w\s]', '', chap_match.group(2).split('(')[0]).strip()[:15] or "총칙"
+                            c_name = re.sub(r'[^\w\s]', '', chap_match.group(2).split('(')).strip()[:15] or "총칙"
                             current_chapter = f"{int(c_num)}. {c_name}"
                             if len(row_text) < 40 and "조" not in row_text:
                                 continue
@@ -622,7 +623,7 @@ class GoogleSheetManager:
                         if not cols:
                             continue
                         
-                        c0_raw = re.sub(r'<[^>]+>', '', cols[0]).strip()
+                        c0_raw = re.sub(r'<[^>]+>', '', cols).strip()
                         is_act_cell = bool(re.match(r'^\s*제\s*\d+\s*조(?:\s*의\s*\d+)?', c0_raw))
                         
                         mapped_cols = ["", "", ""]
@@ -630,17 +631,17 @@ class GoogleSheetManager:
                             mapped_cols = cols[:3]
                         elif len(cols) == 2:
                             if is_act_cell:
-                                mapped_cols[0], mapped_cols[1] = cols[0], cols[1]
+                                mapped_cols, mapped_cols[1] = cols, cols[1]
                             else:
-                                mapped_cols[1], mapped_cols[2] = cols[0], cols[1]
+                                mapped_cols[1], mapped_cols[2] = cols, cols[1]
                         elif len(cols) == 1:
                             if is_act_cell:
-                                mapped_cols[0] = cols[0]
+                                mapped_cols = cols
                             else:
-                                mapped_cols[1] = cols[0]
+                                mapped_cols[1] = cols
 
-                        if mapped_cols[0].strip():
-                            law_match = re.search(r'제\s*(\d+)\s*조(?:\s*의\s*(\d+))?', re.sub(r'<[^>]+>', '', mapped_cols[0]))
+                        if mapped_cols.strip():
+                            law_match = re.search(r'제\s*(\d+)\s*조(?:\s*의\s*(\d+))?', re.sub(r'<[^>]+>', '', mapped_cols))
                             if law_match:
                                 main_num, ext_part = law_match.group(1), law_match.group(2)
                                 current_law_num = f"{int(main_num):03d}조"
@@ -688,14 +689,14 @@ class GoogleSheetManager:
                             if title_match:
                                 title_text = title_match.group(1).strip()
                             else:
-                                first_line = clean_content.replace(article_num_str, "").strip().split('\n')[0]
+                                first_line = clean_content.replace(article_num_str, "").strip().split('\n')
                                 title_text = first_line[:15]
                             
                             clean_title = f"{article_num_str} {title_text}".strip()
                             final_q_name = f"{current_chapter}^{current_law_num}^{col_idx}{type_names.get(col_idx, '법')}^{clean_title}"
                             final_q_name = final_q_name.replace(" ", "")
                             
-                            if final_q_name not in existing and not any(r[0] == final_q_name for r in rows_to_add):
+                            if final_q_name not in existing and not any(r == final_q_name for r in rows_to_add):
                                 rows_to_add.append([final_q_name, clean_content[:45000], creator, today])
                                 
                     except:
@@ -703,7 +704,7 @@ class GoogleSheetManager:
 
             if rows_to_add:
                 self.quests_ws.append_rows(rows_to_add)
-                self.quest_cache = {'data': [], 'time': 0}
+                self.quest_cache = {'data':, 'time': 0}
                 self.load_global_words()
                 return True, f"성공! {len(rows_to_add)}개 저장됨"
             return False, "데이터 없음"
@@ -716,7 +717,7 @@ class GoogleSheetManager:
         try:
             self.quests_ws.clear()
             self.quests_ws.append_row(self.QUEST_HEADERS)
-            self.quest_cache = {'data': [], 'time': 0}
+            self.quest_cache = {'data':, 'time': 0}
             self.load_global_words() 
             return True
         except:
@@ -733,7 +734,7 @@ class GoogleSheetManager:
 
 gm = GoogleSheetManager()
 
-# --- [Routes] ---
+# --- ---
 
 @app.route('/')
 def index():
@@ -771,14 +772,14 @@ def lobby():
     for q in all_quests:
         parts = q['quest_name'].split('^')
         if len(parts) >= 4:
-            ch = parts[0]
+            ch = parts
             if ch not in zones:
-                chapter_id = int(re.findall(r'\d+', ch)[0])
+                chapter_id = int(re.findall(r'\d+', ch))
                 zones[ch] = {'id': chapter_id, 'title': ch, 'rows': {}}
             
             ln = parts[1]
             if ln not in zones[ch]['rows']:
-                zones[ch]['rows'][ln] = [None, [], [], ln]
+                zones[ch]['rows'][ln] = [None,,, ln]
             
             q_data = {
                 'name': q['quest_name'],
@@ -787,17 +788,17 @@ def lobby():
             }
             
             if '0법' in parts[2]:
-                zones[ch]['rows'][ln][0] = q_data
+                zones[ch]['rows'][ln] = q_data
             elif '1령' in parts[2]:
-                zones[ch]['rows'][ln][1].append(q_data)
+                zones[ch]['rows'][ln].[1]append(q_data)
             elif '2규' in parts[2]:
-                zones[ch]['rows'][ln][2].append(q_data)
+                zones[ch]['rows'][ln].[2]append(q_data)
 
     target_chapter = request.args.get('chapter')
     if target_chapter and target_chapter in zones:
         cur_z = zones[target_chapter]
-        system_rows = []
-        for key in sorted(cur_z['rows'].items(), key=lambda x: natural_sort_key(x[0])):
+        system_rows =
+        for key in sorted(cur_z['rows'].items(), key=lambda x: natural_sort_key(x)):
             val = key[1]
             system_rows.append({'triplet': val[:3], 'law_num': val[3]})
             
@@ -805,7 +806,7 @@ def lobby():
         
     return render_template('lobby.html', user=user, zones=sorted(zones.values(), key=lambda x: x['id']), view_mode='galaxy')
 
-@app.route('/game_start', methods=['POST'])
+@app.route('/game_start', methods=)
 def game_start():
     if 'user_id' not in session:
         return redirect(url_for('index'))
@@ -817,7 +818,7 @@ def game_start():
     if not quest:
         return redirect(url_for('lobby'))
     
-    stages = []
+    stages =
     q_type = "법률" if "0법" in q_name else ("시행령" if "1령" in q_name else "시행규칙")
     
     chunks = split_content_smartly(quest['content'])
@@ -848,12 +849,12 @@ def game_start():
         'mode': request.form.get('action'),
         'quest_name': q_name,
         'stages': stages,
-        'chapter': q_name.split('^')[0]
+        'chapter': q_name.split('^')
     }
     
     return redirect(url_for('play_game'))
 
-@app.route('/play', methods=['GET', 'POST'])
+@app.route('/play', methods=)
 def play_game():
     if 'user_id' not in session:
         return redirect(url_for('index'))
@@ -887,7 +888,7 @@ def play_game():
                          user_items=user,
                          time_per_blank=time_per_blank)
 
-@app.route('/zone/generate', methods=['GET', 'POST'])
+@app.route('/zone/generate', methods=)
 def zone_generate():
     if 'user_id' not in session:
         return redirect(url_for('index'))
@@ -901,7 +902,7 @@ def zone_generate():
             
     return render_template('zone_generate.html')
 
-@app.route('/delete_all_quests', methods=['POST'])
+@app.route('/delete_all_quests', methods=)
 def delete_all_quests():
     if 'user_id' in session:
         gm.delete_all_quests_force()
@@ -918,18 +919,98 @@ def mypage():
     user, _ = gm.get_user_by_id(session['user_id'])
     return render_template('mypage.html', user=user)
 
-@app.route('/buy_item', methods=['POST'])
+@app.route('/buy_item', methods=)
 def buy_item():
     item_type = request.form.get('item')
     cost = int(request.form.get('cost'))
     ok, msg = gm.buy_item(session['user_id'], item_type, cost)
     return jsonify({'success': ok, 'msg': msg})
 
-@app.route('/use_item_ingame', methods=['POST'])
+@app.route('/use_item_ingame', methods=)
 def use_item_ingame():
     item_type = request.json.get('item')
     ok = gm.use_item(session['user_id'], item_type)
     return jsonify({'success': ok})
+
+# ==========================================
+# [신규] 문제은행 및 RPG 전투 계산 API 영역
+# ==========================================
+
+# DB 연결 헬퍼 함수
+def get_db_connection():
+    conn = sqlite3.connect('problem_bank.db')
+    conn.row_factory = sqlite3.Row  # 컬럼명으로 데이터에 접근할 수 있게 설정
+    return conn
+
+# 1. 문제은행에서 무작위 기출문제 호출 API
+@app.route('/api/quiz', methods=)
+def get_random_quiz():
+    """문제은행 DB에서 무작위로 기출문제를 하나 불러와 프론트엔드로 전달합니다."""
+    try:
+        conn = get_db_connection()
+        # 난이도나 특정 키워드에 맞춰 랜덤으로 1개의 문제를 가져옵니다.
+        question = conn.execute('SELECT * FROM questions ORDER BY RANDOM() LIMIT 1').fetchone()
+        
+        if not question:
+            conn.close()
+            return jsonify({"error": "문제은행 데이터베이스가 비어있습니다."}), 404
+            
+        # 해당 문제의 선택지(보기) 가져오기
+        choices = conn.execute('SELECT * FROM choices WHERE question_id =?', (question['id'],)).fetchall()
+        conn.close()
+        
+        return jsonify({
+            "id": question['id'],
+            "exam_source": question['exam_id'], # 예: 200321 부산 문제
+            "content": question['content'],
+            "point": 0.8, # 모의고사 기준 배점 적용
+            "choices": [{"id": c['id'], "text": c['content']} for c in choices]
+        })
+    except sqlite3.OperationalError:
+        return jsonify({"error": "데이터베이스 파일(problem_bank.db)이 없거나 접근할 수 없습니다."}), 500
+
+# 2. 정답 제출 및 RPG 데미지 계산 API
+@app.route('/api/combat', methods=)
+def resolve_combat():
+    """제출된 정답을 확인하고 RPG 공식에 따라 몬스터에게 입힐 데미지를 계산합니다."""
+    data = request.json
+    question_id = data.get('question_id')
+    selected_choice_id = data.get('selected_choice_id')
+    question_point = data.get('point', 0.8) # 기본 0.8점 가중치
+    
+    conn = get_db_connection()
+    correct_choice = conn.execute('SELECT id FROM choices WHERE question_id =? AND is_correct = 1', (question_id,)).fetchone()
+    conn.close()
+
+    is_correct = (correct_choice and correct_choice['id'] == selected_choice_id)
+    
+    # 임시 플레이어 및 몬스터 스탯 설정 (추후 세션이나 DB 연동)
+    player_base_attack = 10
+    enemy_defense = 10
+    
+    if is_correct:
+        # 0.8점 문항의 배점을 공격력 가중치로 치환
+        actual_attack = player_base_attack * question_point
+        
+        # 합리적인 데미지 산출 공식 적용
+        if actual_attack >= enemy_defense:
+            damage = (actual_attack * 2) - enemy_defense
+        else:
+            damage = (actual_attack * actual_attack) / enemy_defense
+            
+        return jsonify({
+            "status": "hit", 
+            "is_correct": True,
+            "damage": round(damage, 1), 
+            "message": f"정답입니다! 몬스터에게 {round(damage, 1)}의 피해를 입혔습니다."
+        })
+    else:
+        return jsonify({
+            "status": "miss", 
+            "is_correct": False,
+            "damage": 0, 
+            "message": "오답입니다! 적의 반격으로 체력이 감소합니다."
+        })
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
